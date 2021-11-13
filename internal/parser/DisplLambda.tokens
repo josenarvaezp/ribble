@@ -1,0 +1,12 @@
+MUL=1
+DIV=2
+ADD=3
+SUB=4
+NUMBER=5
+READCSVLINE=6
+WHITESPACE=7
+'*'=1
+'/'=2
+'+'=3
+'-'=4
+'readCSVLine()'=6
