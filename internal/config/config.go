@@ -4,11 +4,14 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/josenarvaezp/displ/internal/objectstore"
+	"gopkg.in/yaml.v3"
 )
 
 func InitLocalCfg() (aws.Config, error) {
@@ -58,4 +61,34 @@ func InitLocalClient() (*s3.Client, error) {
 	})
 
 	return client, nil
+}
+
+func ReadConfigFile(ctx context.Context, bucket string, key string, s3Client *s3.Client) (*objectstore.Buckets, error) {
+	result, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		fmt.Println(err)
+		// TODO: log error
+		return nil, err
+	}
+	defer result.Body.Close()
+
+	body, err := ioutil.ReadAll(result.Body)
+	if err != nil {
+		fmt.Println(err)
+		// TODO: log error
+		return nil, err
+	}
+
+	var buckets objectstore.Buckets
+	err = yaml.Unmarshal(body, &buckets)
+	if err != nil {
+		fmt.Println(err)
+		// TODO: log error
+		return nil, err
+	}
+
+	return &buckets, nil
 }
