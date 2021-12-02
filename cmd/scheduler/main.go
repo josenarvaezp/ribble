@@ -24,13 +24,13 @@ func main() {
 	}
 	ctx := context.Background()
 
-	client, err := config.InitLocalClient()
+	s3Client, err := config.InitLocalS3Client()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	configFile, err := config.ReadConfigFile(ctx, "09cd3797-1b53-4c61-b24f-b454bbec73a7", configFileKey, client)
+	configFile, err := config.ReadConfigFile(ctx, "09cd3797-1b53-4c61-b24f-b454bbec73a7", configFileKey, s3Client)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -44,5 +44,15 @@ func main() {
 		return
 	}
 
-	fmt.Printf("%+v ", mappings)
+	err = scheduler.StartMappers(ctx, mappings, "mapperFuncName")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = scheduler.StartCoordinator(ctx, "coordinatorFuncName")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Printf("%+v ", *mappings[0])
 }

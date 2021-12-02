@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/josenarvaezp/displ/internal/objectstore"
 	"gopkg.in/yaml.v3"
@@ -49,7 +50,7 @@ func InitLocalCfg() (aws.Config, error) {
 	return cfg, nil
 }
 
-func InitLocalClient() (*s3.Client, error) {
+func InitLocalS3Client() (*s3.Client, error) {
 	cfg, err := InitLocalCfg()
 	if err != nil {
 		fmt.Println(err)
@@ -61,6 +62,16 @@ func InitLocalClient() (*s3.Client, error) {
 	})
 
 	return client, nil
+}
+
+func InitLocalLambdaClient() (*lambda.Client, error) {
+	cfg, err := InitLocalCfg()
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
+	return lambda.NewFromConfig(cfg), nil
 }
 
 func ReadConfigFile(ctx context.Context, bucket string, key string, s3Client *s3.Client) (*objectstore.Buckets, error) {

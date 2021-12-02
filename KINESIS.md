@@ -1,6 +1,6 @@
 # Kinesis Data Streams
 
-Kinesis can be used for rapid and continous data intake and aggregation. Kinesis streams are composed of data records which are the units of data. Thid data records are distributed into different shards of the same stream. A producer writes data into the shar while a consumer reads from it. 
+Kinesis can be used for rapid and continous data intake and aggregation. Kinesis streams are composed of data records which are the units of data. Thid data records are distributed into different shards of the same stream. A producer writes data into the shar while a consumer reads from it.
 
 ## Advantages
 - real time processing -> don't need to wait for batches
@@ -17,7 +17,7 @@ To send a record to a stream, we need to specify the stream, partition key and t
 https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html
 - use batch window (up to 5 minutes) to avoid using small batches by configuing the event source
 - event source mapping can be configured to retry with a smaller batch size, limit the number of retries, or discard records that are too old.
-- event source mapping can be configured to send failed batches to sqs
+- event source mapping can be configured to send failed batches to sqs or SNS
 - We can increase concurrency by processing multile batches from each shard in parallel (up to 10 batches per shard) configure -> ParallelizationFactor
     ** "Note that parallelization factor will not work if you are using Kinesis aggregation"
 - Good thing is that we know Max concurrency levels before we start
@@ -35,7 +35,7 @@ This means that if we have all values relating a key in the same shard using the
 - "Tumbling windows fully support the existing retry policies maxRetryAttempts and maxRecordAge."
 
 ### Reporting batch item failures
-- If a batch fails, by default, lambda retries the whole batch again. This means that we need to process agin events that were valid. To avoid this, we can add ReportBatchItemFailures to FunctionResponseTypes in the event source mapping. We then need to include ReportBatchItemFailures in the StreamsEventResponse of our lambda. If BisectBatchOnFunctionError is also on, lambda only retries the remaining records. 
+- If a batch fails, by default, lambda retries the whole batch again. This means that we need to process again events that were valid. To avoid this, we can add ReportBatchItemFailures to FunctionResponseTypes in the event source mapping. We then need to include ReportBatchItemFailures in the StreamsEventResponse of our lambda. If BisectBatchOnFunctionError is also on, lambda only retries the remaining records. Important to notice that with this technique we could be processing errors twice, to avoid this use checpoint strategy discussed above.
 
 ## Quotas 
 - No upper quota on number of streams
@@ -50,6 +50,17 @@ API limits:
 - Create stream limited to 5 transactions per second
 - At most 5 streams in creating state
 
+
+## Data Processing tutorial (https://data-processing.serverlessworkshops.io/)
+- ERROR HANDLING WITH CHECKPOINT AND BISECT ON BATCH https://data-processing.serverlessworkshops.io/stream-processing/05-extra-credit/05-01-eh-cp-bb.html This basically creates a checkpoint of the processed data so in case of failure we only re-process new events
+- ENHANCED FAN OUT https://data-processing.serverlessworkshops.io/stream-processing/05-extra-credit/05-02-efo.html If we don't want to share the shard connection between multiple consumers to increase data latency and thoguhput (2MB/sec), we can add a consumer to the data stream: 
+```
+aws kinesis register-stream-consumer --consumer-name con1 \
+--stream-arn arn:aws:kinesis:us-east-2:123456789012:stream/lambda-stream
+```
+And use the consumer name for the event source mapping instead of the lambda name
+
 Sources: 
 - TODO: https://aws.amazon.com/streaming-data/
 - https://docs.aws.amazon.com/streams/latest/dev/introduction.html
+- https://data-processing.serverlessworkshops.io/

@@ -2,15 +2,26 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/google/uuid"
+
 	"github.com/josenarvaezp/displ/internal/objectstore"
 )
 
+// TODOs:
+// - This operation requires permission for the lambda:InvokeFunction action.
+// - When creating the mapper lambda remember to set up the max number of retries and max age of events
+// - reserve concurrency for the coordinator (just one)
+
 const (
-	MB        int64 = 1048576
-	chunkSize int64 = 64 * MB // size of chunks in bytes
+	MB          int64 = 1048576
+	chunkSize   int64 = 64 * MB // size of chunks in bytes
+	successCode int32 = 202     // sucessful code for asynchronous lambda invokation
 )
 
 // mapping represents the collection of objects that are used as input
@@ -23,8 +34,8 @@ type mapping struct {
 }
 
 // newMapping initialises the mapping with an id and size 0
-func newMapping() mapping {
-	return mapping{
+func newMapping() *mapping {
+	return &mapping{
 		mapID: uuid.New(),
 		size:  0,
 	}
@@ -32,10 +43,10 @@ func newMapping() mapping {
 
 // generateMapping generates the input for the mappers. Each mapping has a map id, a list of objects
 // where each object has a specified range and the size of it.
-func (s *Scheduler) GenerateMappings(ctx context.Context, objects []objectstore.Object) ([]mapping, error) {
+func (s *Scheduler) GenerateMappings(ctx context.Context, objects []objectstore.Object) ([]*mapping, error) {
 	// init mappings
 	currentMapping := 0
-	mappings := []mapping{}
+	mappings := []*mapping{}
 	firstMapping := newMapping()
 	mappings = append(mappings, firstMapping)
 
@@ -94,4 +105,64 @@ func (s *Scheduler) GenerateMappings(ctx context.Context, objects []objectstore.
 		}
 	}
 	return mappings, nil
+}
+
+// StartMappers sends the each split into lambda
+func (s *Scheduler) StartMappers(ctx context.Context, mappings []*mapping, functionName string) error {
+	for _, currentMapping := range mappings {
+		// create payload describing split
+		requestPayload, err := json.Marshal(*currentMapping)
+		if err != nil {
+			fmt.Println("Error marshalling mapping")
+			return err
+		}
+
+		// send the mapping split into lamda
+		result, _ := s.lambdaClient.Invoke(
+			ctx,
+			&lambda.InvokeInput{
+				FunctionName:   aws.String(functionName),
+				Payload:        requestPayload,
+				InvocationType: types.InvocationTypeEvent,
+			},
+		)
+
+		// error is ignored from asynch invokation and result only holds the status code
+		// check status code
+		if result.StatusCode == successCode {
+			// TODO: update task to "Received" status in dynamoDB
+		} else {
+			// TODO: don't stop execution but inform the user about the errors
+		}
+	}
+
+	return nil
+}
+
+// StartCoordinator starts the lambda coordinator
+func (s *Scheduler) StartCoordinator(ctx context.Context, functionName string) error {
+	// add job id to coordinator payload
+	requestPayload, err := json.Marshal(map[string]string{"job-id": s.jobID.String()})
+	if err != nil {
+		fmt.Println("Error marshalling job-id")
+		return err
+	}
+
+	// invoke coordinator lambda
+	result, _ := s.lambdaClient.Invoke(
+		ctx,
+		&lambda.InvokeInput{
+			FunctionName:   aws.String(functionName),
+			Payload:        requestPayload,
+			InvocationType: types.InvocationTypeEvent,
+		},
+	)
+
+	if result.StatusCode == successCode {
+		// TODO: do something
+	} else {
+		// we need to invoke the coordinator again
+	}
+
+	return nil
 }
