@@ -3,7 +3,9 @@
 Paralellizing data processing has been in the roadmap of engineers trying to create more efficient processing frameworks for a long time. Allowing paralelization into frameworks requires a set of computers than can be used to process the data, it is clear to see that the management and configuration of this resources becomes a major bottleneck. Cloud providers have created solutions for this problem by introducing managed clusters that allow users to run big data applications without the need of having on-premise clusters. An example of this is Amazon EMR, a service that allows you to configure elastic clusters running on EC2 instances in a matter of minutes. However, recent research [2] has proven that serverless data processing frameworks outperform frameworks running on managed clusters. For this reason, in this section we eveluate different existing solutions for serverless data processing in the cloud. 
 
  
-1. AWS serveless mapreduce
+## AWS serveless mapreduce
+
+The simplest of frameworks is the one 
 
 ## Corral
 
@@ -68,6 +70,27 @@ Modes:
 - Map+monolitic reduce (the aggregated values are stored in a single reducer) This is useful whith compute intensive application that do not generate many features. 
 - MapReduce: shuffle is an important design consiferation to achieve fast mapreduce frameworks. PyWren uses S3 as its mechanism to implement shuffles. The shuffle is achieved in two steps: A partition stage that partitions input data into n partitions and a merge stage that for each partition merges the data and sorts it. Given the limitations of lambda, PyWren needs many workers to achieve the shuffle. For 1 TB of data it requires to shuffle around 6 million files and while S3 has a high I/O throughput, it falls short. As a solution, PyWren uses a Redis cluster for the intermediate storage and keeps S3 for the input and output. However, this Redis cluster becomes a bottleneck if not configured correctly. Another limitation of this is the fact that a Redis cluster is charged per hour, which in a way makes PyWren to be similar to a managed cluster service where you pay by the hour rather than exlusivly for what you use.  
 
+## Starling
+
+Startling is a serverless query execution engine. 
+
+Execution:
+Queries are submited by the users to the coordinator who is responsible of compiling the query and uploading it to the cloud function service. The function service provisions the workers that perform the query tasks, these invokations are invoked at once in parallel from a cold start. These workers read and write data (both intermediate and final output) from cloud object storage services. Once workers are done, the query result is returned to the user. 
+
+- The coordinator runs in a smalle VM, which means the framework is not entirely serverles.
+- Uses AWS Lambda
+
+Shuffling data:
+- The perfect medium of communication between workers to achieve the shuffle mechanism should be low cost, high trhoughput, low latency, and scale transparently
+- Starling argues against AWS Kinesis, as this involves the framework or users to prevision capacity ahead of execution. SQS becomes computationally expensive for large shuffles. And Dynamo DB has low latency but it becomes very expesive for large shuffles. Hence, Sterling decided to use S3 as the medium for inter communication between workers. 
+- Workers write output to S3 as a single object with a predetermined key. Having a pre-determined key means that readers can poll the object until it exists. 
+- A single partitioned file is written to S3 and each consumer task reads only the relevant portions of each object output by the producers. 
+- Each producer writes a single object that contains all partitions. This is done to minimize write costs. And each consumer reads only the relevant part of each of these objects. This is possible using S3 read with offset functionality. Consumers determine which part of the file to read using by using the metadata written by the producer at the start of the file. This means that a consumer needs 2 reads per object, one for the metadata and the second for the actual data. 
+- (just as a note) To mitigate read-after-write inconsistencies, Sterling uses a "doublewrite" technique which involes write the worker ouput twice to two different objects so that consumers that can't find the data in the first object they can try to read from the second object. 
+- Given that workers are small many small sized objects can be written. This is a concern prize wise when a lot of workers are required. To solve this issue, Starling introduces a combiner stage. Each combiner worker reads a contiguous subset of the partition from a subset of the partitions and produce a single combined output. 
+
+![Alt text](./images/multi-stage_shuffle_sterling.png) 
+[TODO]
 
 3. Cloud map reduce: A MapReduce Implementation on top of a Cloud Operating System  
 
@@ -75,6 +98,8 @@ Modes:
 
 Similitudes:
 - Driver: where does the driver live and how does it communicate with the rest of the resouces. Synch communiction to keep track of resources means that the driver must persist for the duration of the job. This brings up two probles, first it means that the platfrom depends on the driver running for the duration of the job and this makes the framework not entirely serverless. In the other side, if the framework runs in a serverless function then it means the framework is restricted to the maximum amount of time the functino can run for (AWS has a 15 min max). 
+
+- All frameworks use FAAS
 
 - Communication: serverless functions do not have a natural way of communicating with each other, and given their stateless nature, a work around is used by all frameworks. Corral uses s3, and it creates a folder for each key it encountersso that the reducers only need to look at one forder (shuffling step done). PyWren rellies on the programmer to define the shuffling step (given that we want this framework to be as simple as possible we avoid doing that). It is important to notice that given that we depend on external services, extra care should be taken to make sure each of the resources can scale up as desired to avoid having a bottleneck anywhere in the system. Quobole relies on a single VM for inter-process comuniction which becomes a bottleneck for big datasets.
 
