@@ -48,6 +48,27 @@ Limitations:
 - Failures are not handled gracefully. In hadoop, failures are re-executed however, if the mappers or reducers fail the frameworks finishes with incorrect data. There is no automatic re-execution strategy. 
 - Data in each mapper needs to fit into memory as the results of the mapper is sorted before sending to the reducers
 
+## Lambada
+
+Lambada uses S3 for large data, dynamo DB for small data in the shape of key-value pairs and SQS is used for short messages. 
+- All communication is done by external storage.
+Architecture:
+- The driver runs in the local machine of the developer/analyst
+- It then invokes a fleet of workers running on AWS lambda. These workers are responsible of executing the query in parallel.
+- Similar to MARLA, lambada invokes lambda workers in a recursive way in order to efficiently invoke all the desired workers. Given that the lambdas can take up to 0.5 seconds to initialize, starting 1000 lambdas could take up to 500 seconds if executed sequentially. Clearly multi-threading the requests can reduce this number significantly but there is still an overhead when invoking the workers. To solve this, Lambada offloads this to the first workers by passing a list of ids and input data. Once the workers recieve this data, they start they invoke workers for each item in the list before executing their processing function. According to Lambada this mechanism enabled the framework to invoke 4096 workers in 2.5 seconds from the initial 13 to 18 seconds. (As a note for me, the driver and the first-level workers execute the same amount of workers)  
+
+## PyWren 
+
+PyWren is an Python API that allows programmers to parallelize embrassingly parallelizable jobs. 
+
+- For the lamdas functions, there is a common function that then pulls the code needed to run from S3 using cloudpickle. 
+
+- PyWren integrates with existing libraries for data processing and visualization
+Modes:
+- Map+monolitic reduce (the aggregated values are stored in a single reducer) This is useful whith compute intensive application that do not generate many features. 
+- MapReduce: shuffle is an important design consiferation to achieve fast mapreduce frameworks. PyWren uses S3 as its mechanism to implement shuffles. The shuffle is achieved in two steps: A partition stage that partitions input data into n partitions and a merge stage that for each partition merges the data and sorts it. Given the limitations of lambda, PyWren needs many workers to achieve the shuffle. For 1 TB of data it requires to shuffle around 6 million files and while S3 has a high I/O throughput, it falls short. As a solution, PyWren uses a Redis cluster for the intermediate storage and keeps S3 for the input and output. However, this Redis cluster becomes a bottleneck if not configured correctly. Another limitation of this is the fact that a Redis cluster is charged per hour, which in a way makes PyWren to be similar to a managed cluster service where you pay by the hour rather than exlusivly for what you use.  
+
+
 3. Cloud map reduce: A MapReduce Implementation on top of a Cloud Operating System  
 
 4. Evaluating serverless data processing frameworks
@@ -56,11 +77,6 @@ Similitudes:
 - Driver: where does the driver live and how does it communicate with the rest of the resouces. Synch communiction to keep track of resources means that the driver must persist for the duration of the job. This brings up two probles, first it means that the platfrom depends on the driver running for the duration of the job and this makes the framework not entirely serverless. In the other side, if the framework runs in a serverless function then it means the framework is restricted to the maximum amount of time the functino can run for (AWS has a 15 min max). 
 
 - Communication: serverless functions do not have a natural way of communicating with each other, and given their stateless nature, a work around is used by all frameworks. Corral uses s3, and it creates a folder for each key it encountersso that the reducers only need to look at one forder (shuffling step done). PyWren rellies on the programmer to define the shuffling step (given that we want this framework to be as simple as possible we avoid doing that). It is important to notice that given that we depend on external services, extra care should be taken to make sure each of the resources can scale up as desired to avoid having a bottleneck anywhere in the system. Quobole relies on a single VM for inter-process comuniction which becomes a bottleneck for big datasets.
-
-
-## My framework considerations
-- To simplify the framework to developers, all data is combined in the mapper before sending it to the reducers. This means that the output of the mapper needs to be no larger than the memory limit of the serverless function. Note that the input data for the mapper is streamed into the mapper, hence there is no correlation between the input size with the functins's memory size. For example, a mapper that reads 1 GB, but beacause of the filtering, outputs a 1 MB size does not need to have a memory size of 1GB. 
-
 
 
 ## Resources:
@@ -73,3 +89,6 @@ Similitudes:
 A framework and a performance assessment for serverless MapReduce
 on AWS Lambda. Future Generation Computer Systems 97 (2019), 
 - https://aws.amazon.com/emr/features/?nc=sn&loc=2&dn=1 AMAZON EMR Features
+- TODO: add lambada pdf
+- TODO: pyWren paper
+- TODO: add Starling paper
