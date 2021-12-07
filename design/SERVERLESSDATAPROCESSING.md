@@ -5,7 +5,20 @@ Paralellizing data processing has been in the roadmap of engineers trying to cre
  
 ## AWS serveless mapreduce
 
-The simplest of frameworks is the one 
+The simplest of frameworks is the one provided by AWS. This framework allows the users to run ad hoc map reduce jobs using a serverless architecture using AWS Lambda and S3 as its main components. It states that the solution is cheaper and faster that existing well-known MapReduce frameworks.  
+
+This framework is composed of a loal driver and three main Lambda functions: the mapper, reducer and coordinator. Both the mapper and reducer are functions specified by the user while the coordinator is provided by the framework. Different to other serverless MapReduce frameworks, this implementation uses the coordinator as a serverless function and saves its state data to S3. This allows the architecture to be truly serverless. 
+
+Workflow:
+1. The execution begins with the driver who is responsibleof reading the configuration file to determine the location of the mapper and reducer files as well as the input data in S3. The driver reads the input data to create batches which will be passes into the mappers. Finally the driver creates the three lambdas and it creates an S3 folder which will be used as a temporary workspace for the job. 
+2. Each mapper reads from the input batch created by the driver and outputs the result of their computation into the S3 folder created for the job. Using an event-source on the S3 folder, the coordinator is invoked and sends the output of the mappers to the reducers in batches. 
+3. The coordinator is notified everytime a new reduce phase finishes and initializes the next stage until there is a single reduced output. 
+
+![Alt text](./images/aws_mapreduce.png) 
+[1]
+
+Limitations:
+- From the design it is clear that this implementation will not be able to scale as the amount of data to process increases. This is caused by the absence of a shuffle stage and it means that the reducers will need to reduce through all files recursivly until there is only one left. 
 
 ## Corral
 
