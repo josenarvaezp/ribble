@@ -105,6 +105,20 @@ Shuffling data:
 ![Alt text](./images/multi-stage_shuffle_sterling.png) 
 [TODO]
 
+## Flint
+
+Flint is a serverless framework that allows users to run processing jobs using PySpark without the need of a Spark cluster. The framework is entirley pay-as-you-go model as it relies on AWS Lambda, S3, and SQS. AWS Lambda is used to execute Spark tasks, the input and output are stored in S3, and SQS is used to shuffle data. 
+
+- The executors run in AWS Lambda, each lambda process one task
+- When a Flint executor is initialized, it creates an input iterator to read from the input partition assigned to it. This iterator reads from S3 for the first plan, however, Flint relies on SQS as the input for the following stages. 
+- Similar to MapReduce, when a task is completed, the outputdata of an intermediate stage needs to be shuffled to ensure all values of a key are place in the same partition. Given that the Lambdas functions have a time limit, Flint cannot guarantee this output is passed to the executors running tasks in the next stage. To overcome this, Flint uses SQS. 
+- Executor's output is partitioned using the hash partition function specified. The executor tries to batch the output in memory but once it becomes large to be in memory it flushes the output into SQS as a batch of messages. Once the output has all been flushed the executor returns diagnostic SQS data.
+- The next set of executors read data from SQS and aggreagate the data in memory. To avoid overflowing the memory, Flint increases the number of partitions (SQS queues).
+
+Intresting solutions:
+- To work around the time limit lambda functions have, Flint stops the execution of lambdas when a time limit is soon to be reached. Before this it saves its state by sending it back to the sheduler. The scheduler then uses this information to start a new lambda to start right from where the other lambda stop. 
+
+
 3. Cloud map reduce: A MapReduce Implementation on top of a Cloud Operating System  
 
 4. Evaluating serverless data processing frameworks
@@ -130,3 +144,4 @@ on AWS Lambda. Future Generation Computer Systems 97 (2019),
 - TODO: add lambada pdf
 - TODO: pyWren paper
 - TODO: add Starling paper
+- TODOL add flint paper
