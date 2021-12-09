@@ -3,10 +3,13 @@
 The driver is responsible of starting the framework. This driver is the only component of the system that is not serverless, meaning that user will need to run this from either their local computers or a vm hosted in the cloud. However, this driver is not responsible of coordinating the different components after the startup, and for that reason the user does not need to rely on the computer running the driver. 
 
 One of the responsabilities of the driver is to setup the cloud resources needed to run the processing framework. This includes setting up the following resources:
+1. An S3 bucket for the job. This will be used to store the intermediate data needed by the framework as well as the final output.
+2. Upload the images of the mapper function to ECR. This image contains the function specified by the user which will be used to process the data. Note that the images for the rest of the serverless functions needed by the framework such as the coordinator and reducers are already publicly available in ECR. 
+3. Configure the S3 service to invoke the coordinator lambda when the mappers are done. When the last mapper finish its execution, it will create a blank object in the job's bucket under the key "signals/coordinator/". The S3 service will notice this event and it will invoke the coordinator.
+
+TODO: probs remove this
 1. The kinesis stream used by the mappers to send its output to the reducers.
 2. A Dynamo DB table used by the coordinator to orchestrate the phases and resources of the framework.
-3. An S3 bucket for the job. This will be used to store the final results and it will also be used by the reducers and coordinators to save their state if needed.
-4. Upload the images of the mapper function to ECR. This image contains the function specified by the user which will be used to process the data. Note that the images for the rest of the serverless functions needed by the framework such as the coordinator and reducers are already publicly available in ECR. 
 
 Once this resources are created the framwork is ready to start processing data. The driver executes the following steps:
 
