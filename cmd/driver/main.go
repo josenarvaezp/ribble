@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/config"
+	"github.com/josenarvaezp/displ/internal/driver"
 	"github.com/josenarvaezp/displ/internal/objectstore"
-	"github.com/josenarvaezp/displ/internal/scheduler"
 )
 
 const (
@@ -17,7 +17,7 @@ const (
 func main() {
 	// Test local execution
 	jobID := uuid.New()
-	scheduler, err := scheduler.NewScheduler(jobID, true) // TODO add client here
+	driver, err := driver.NewDriver(jobID, true) // TODO add client here
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -36,20 +36,28 @@ func main() {
 		return
 	}
 
-	objects := objectstore.BucketsToObjects(configFile.Buckets)
-
-	mappings, err := scheduler.GenerateMappings(ctx, objects)
+	// Setting up resources
+	err = driver.CreateJobBucket(ctx)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	err = scheduler.StartMappers(ctx, mappings, "mapperFuncName")
+	err = driver.CreateCoordinatorNotification(ctx)
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
 
-	err = scheduler.StartCoordinator(ctx, "coordinatorFuncName")
+	objects := objectstore.BucketsToObjects(configFile.Buckets)
+
+	mappings, err := driver.GenerateMappings(ctx, objects)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	err = driver.StartMappers(ctx, mappings, "mapperFuncName")
 	if err != nil {
 		fmt.Println(err)
 	}

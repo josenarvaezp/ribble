@@ -1,4 +1,4 @@
-package scheduler
+package driver
 
 import (
 	"context"
@@ -15,22 +15,23 @@ import (
 // TODOS:
 // add sessions instead of clients sess := session.Must(session.NewSession()) svc = dynamodb.New(sess)
 
-// SchedulerInterface defines the methods available for the scheduler
-type SchedulerInterface interface {
+// DriverInterface defines the methods available for the Driver
+type DriverInterface interface {
 	GenerateMappings(context.Context, []objectstore.Object) ([]mapping, error)
 	StartMappers(ctx context.Context, mappings []*mapping, functionName string, region string) error
-	StartCoordinator(ctx context.Context, functionName string) error
+	CreateJobBucket(ctx context.Context) error
+	CreateCoordinatorNotification(ctx context.Context) error
 }
 
-// Scheduler is a struct that implements the scheduler interface
-type Scheduler struct {
+// Driver is a struct that implements the Driver interface
+type Driver struct {
 	jobID        uuid.UUID
 	s3Client     *s3.Client
 	lambdaClient *lambda.Client
 }
 
-// NewScheduler creates a new scheduler struct
-func NewScheduler(jobID uuid.UUID, local bool) (Scheduler, error) {
+// NewDriver creates a new Driver struct
+func NewDriver(jobID uuid.UUID, local bool) (Driver, error) {
 	var s3Client *s3.Client
 	var lambdaClient *lambda.Client
 	var err error
@@ -39,20 +40,20 @@ func NewScheduler(jobID uuid.UUID, local bool) (Scheduler, error) {
 		if err != nil {
 			// TODO: add logs
 			fmt.Println(err)
-			return Scheduler{}, err
+			return Driver{}, err
 		}
 
 		lambdaClient, err = config.InitLocalLambdaClient()
 		if err != nil {
 			// TODO: add logs
 			fmt.Println(err)
-			return Scheduler{}, err
+			return Driver{}, err
 		}
 	}
 
 	// TODO: implement non local client
 
-	return Scheduler{
+	return Driver{
 		jobID:        jobID,
 		s3Client:     s3Client,
 		lambdaClient: lambdaClient,
