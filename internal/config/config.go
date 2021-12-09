@@ -4,16 +4,16 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/josenarvaezp/displ/internal/objectstore"
-	"gopkg.in/yaml.v3"
 )
+
+// Sources:
+// - Setting credentials: https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/
 
 func InitLocalCfg() (aws.Config, error) {
 	localstackEndpointResolver := aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
@@ -50,6 +50,24 @@ func InitLocalCfg() (aws.Config, error) {
 	return cfg, nil
 }
 
+// InitCfg initializes the configuration for the aws services that the driver
+// needs. Please note that the AWS credentials are taken from the
+// credentials file uner .aws placed in the home directory of the computer
+// runnin the driver
+func InitCfg(region string) (aws.Config, error) {
+	cfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithRegion(region),
+	)
+	if err != nil {
+		// TODO: log error
+		fmt.Println(err)
+		return aws.Config{}, err
+	}
+
+	return cfg, nil
+}
+
 func InitLocalS3Client() (*s3.Client, error) {
 	cfg, err := InitLocalCfg()
 	if err != nil {
@@ -72,34 +90,4 @@ func InitLocalLambdaClient() (*lambda.Client, error) {
 	}
 
 	return lambda.NewFromConfig(cfg), nil
-}
-
-func ReadConfigFile(ctx context.Context, bucket string, key string, s3Client *s3.Client) (*objectstore.Buckets, error) {
-	result, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		fmt.Println(err)
-		// TODO: log error
-		return nil, err
-	}
-	defer result.Body.Close()
-
-	body, err := ioutil.ReadAll(result.Body)
-	if err != nil {
-		fmt.Println(err)
-		// TODO: log error
-		return nil, err
-	}
-
-	var buckets objectstore.Buckets
-	err = yaml.Unmarshal(body, &buckets)
-	if err != nil {
-		fmt.Println(err)
-		// TODO: log error
-		return nil, err
-	}
-
-	return &buckets, nil
 }

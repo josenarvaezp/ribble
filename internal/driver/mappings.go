@@ -4,13 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3Types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v2"
 
 	"github.com/josenarvaezp/displ/internal/objectstore"
 )
@@ -53,12 +57,15 @@ func newMapping() *mapping {
 
 // generateMapping generates the input for the mappers. Each mapping has a map id, a list of objects
 // where each object has a specified range and the size of it.
-func (s *Driver) GenerateMappings(ctx context.Context, objects []objectstore.Object) ([]*mapping, error) {
+func (s *Driver) GenerateMappings(ctx context.Context, inputBuckets *objectstore.Buckets) ([]*mapping, error) {
 	// init mappings
 	currentMapping := 0
 	mappings := []*mapping{}
 	firstMapping := newMapping()
 	mappings = append(mappings, firstMapping)
+
+	// get all objects across buckets
+	objects := objectstore.BucketsToObjects(inputBuckets.Buckets)
 
 	for _, object := range objects {
 		availableSpace := chunkSize - mappings[currentMapping].size
@@ -235,30 +242,64 @@ func (d *Driver) CreateCoordinatorNotification(ctx context.Context) error {
 	return nil
 }
 
-// // StartCoordinator starts the lambda coordinator
-// func (s *Driver) StartCoordinator(ctx context.Context, functionName string) error {
-// 	// add job id to coordinator payload
-// 	requestPayload, err := json.Marshal(map[string]string{"job-id": s.jobID.String()})
-// 	if err != nil {
-// 		fmt.Println("Error marshalling job-id")
-// 		return err
-// 	}
+// CreateQueues creates numQueues. This queues will be used by the framework
+// to send data from the mappers to the reducers.
+func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
+	for i := 1; i <= numQueues; i++ {
+		// name of the queues takes the job id as prefix
+		currentQueueName := fmt.Sprintf("%s-%d", d.jobID, i)
+		params := &sqs.CreateQueueInput{
+			QueueName: &currentQueueName,
+			// TODO: add attributes and tags
+		}
+		_, err := d.sqsClient.CreateQueue(ctx, params)
+		if err != nil {
+			// TODO: maybe retry on error?
+			fmt.Println(err)
+			return err
+		}
+	}
 
-// 	// invoke coordinator lambda
-// 	result, _ := s.lambdaClient.Invoke(
-// 		ctx,
-// 		&lambda.InvokeInput{
-// 			FunctionName:   aws.String(functionName),
-// 			Payload:        requestPayload,
-// 			InvocationType: types.InvocationTypeEvent,
-// 		},
-// 	)
+	// wait one second before the queues can be used
+	time.Sleep(1 * time.Second)
 
-// 	if result.StatusCode == successCode {
-// 		// TODO: do something
-// 	} else {
-// 		// we need to invoke the coordinator again
-// 	}
+	return nil
+}
 
-// 	return nil
-// }
+type ConfigFile struct {
+	InputBuckets *objectstore.Buckets
+}
+
+// ReadConfigFile reads the config file from the specified object
+func (d *Driver) ReadConfigFile(ctx context.Context, bucket string, key string) (*ConfigFile, error) {
+	// TODO: extend function to read more config values
+	result, err := d.s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		fmt.Println(err)
+		// TODO: log error
+		return nil, err
+	}
+	defer result.Body.Close()
+
+	body, err := ioutil.ReadAll(result.Body)
+	if err != nil {
+		fmt.Println(err)
+		// TODO: log error
+		return nil, err
+	}
+
+	var buckets objectstore.Buckets
+	err = yaml.Unmarshal(body, &buckets)
+	if err != nil {
+		fmt.Println(err)
+		// TODO: log error
+		return nil, err
+	}
+
+	return &ConfigFile{
+		InputBuckets: &buckets,
+	}, nil
+}

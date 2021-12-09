@@ -7,13 +7,12 @@ import (
 	"github.com/josenarvaezp/displ/internal/config"
 	"github.com/josenarvaezp/displ/internal/objectstore"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/google/uuid"
 )
-
-// TODOS:
-// add sessions instead of clients sess := session.Must(session.NewSession()) svc = dynamodb.New(sess)
 
 // DriverInterface defines the methods available for the Driver
 type DriverInterface interface {
@@ -21,6 +20,8 @@ type DriverInterface interface {
 	StartMappers(ctx context.Context, mappings []*mapping, functionName string, region string) error
 	CreateJobBucket(ctx context.Context) error
 	CreateCoordinatorNotification(ctx context.Context) error
+	CreateQueues(ctx context.Context, numQueues int)
+	ReadConfigFile(ctx context.Context, bucket string, key string) (*ConfigFile, error)
 }
 
 // Driver is a struct that implements the Driver interface
@@ -28,34 +29,43 @@ type Driver struct {
 	jobID        uuid.UUID
 	s3Client     *s3.Client
 	lambdaClient *lambda.Client
+	sqsClient    *sqs.Client
 }
 
 // NewDriver creates a new Driver struct
-func NewDriver(jobID uuid.UUID, local bool) (Driver, error) {
-	var s3Client *s3.Client
-	var lambdaClient *lambda.Client
+func NewDriver(jobID uuid.UUID, region string, local bool) (*Driver, error) {
+	var cfg aws.Config
 	var err error
-	if local {
-		s3Client, err = config.InitLocalS3Client()
-		if err != nil {
-			// TODO: add logs
-			fmt.Println(err)
-			return Driver{}, err
-		}
 
-		lambdaClient, err = config.InitLocalLambdaClient()
+	// init driver with job id
+	driver := &Driver{
+		jobID: jobID,
+	}
+
+	if local {
+		// point clients to localstack
+		cfg, err = config.InitLocalCfg()
 		if err != nil {
 			// TODO: add logs
 			fmt.Println(err)
-			return Driver{}, err
+			return nil, err
+		}
+	} else {
+		// Load the configuration using the aws config file
+		cfg, err = config.InitCfg(region)
+		if err != nil {
+			// TODO: add logs
+			fmt.Println(err)
+			return nil, err
 		}
 	}
 
-	// TODO: implement non local client
+	// create and add clients to driver
+	driver.s3Client = s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.UsePathStyle = true
+	})
+	driver.lambdaClient = lambda.NewFromConfig(cfg)
+	driver.sqsClient = sqs.NewFromConfig(cfg)
 
-	return Driver{
-		jobID:        jobID,
-		s3Client:     s3Client,
-		lambdaClient: lambdaClient,
-	}, nil
+	return driver, nil
 }
