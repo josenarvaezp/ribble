@@ -6,6 +6,7 @@ One of the responsabilities of the driver is to setup the cloud resources needed
 1. An S3 bucket for the job. This will be used to store the intermediate data needed by the framework as well as the final output.
 2. Upload the images of the mapper function to ECR. This image contains the function specified by the user which will be used to process the data. Note that the images for the rest of the serverless functions needed by the framework such as the coordinator and reducers are already publicly available in ECR. 
 3. Configure the S3 service to invoke the coordinator lambda when the mappers are done. When the last mapper finish its execution, it will create a blank object in the job's bucket under the key "signals/coordinator/". The S3 service will notice this event and it will invoke the coordinator.
+4. Create the SQS queues that wll be used to shuffle the data. 
 
 TODO: probs remove this
 1. The kinesis stream used by the mappers to send its output to the reducers.
