@@ -20,18 +20,13 @@ type ObjectRange struct {
 	FinalByte   int64
 }
 
-// Buckets represents a collection of cloud buckets
-type Buckets struct {
-	Buckets []Bucket `yaml:"buckets"`
-}
-
 // Bucket represents a cloud bucket
 type Bucket struct {
 	Name string   `yaml:"name"`
 	Keys []string `yaml:"keys"`
 }
 
-func BucketsToObjects(buckets []Bucket) []Object {
+func BucketsToObjects(buckets []*Bucket) []Object {
 	objects := []Object{}
 
 	for _, bucket := range buckets {
@@ -42,7 +37,7 @@ func BucketsToObjects(buckets []Bucket) []Object {
 	return objects
 }
 
-func BucketToObject(bucket Bucket) []Object {
+func BucketToObject(bucket *Bucket) []Object {
 	objects := make([]Object, len(bucket.Keys))
 
 	for i, key := range bucket.Keys {

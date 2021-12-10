@@ -8,30 +8,16 @@ import (
 	"github.com/josenarvaezp/displ/internal/driver"
 )
 
-const (
-	configBucket       string = "testBucket" // TODO: get as input from user
-	configFileKey      string = "config.yaml"
-	defaultRegion      string = "eu-west-2"
-	mapperFunctionName string = "mapperFuncName"
-)
-
 func main() {
 	jobID := uuid.New()
-	driver, err := driver.NewDriver(jobID, defaultRegion, false /*Not local*/)
+	driver, err := driver.NewDriver(jobID, "config.yaml")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	ctx := context.Background()
 
-	// read config file from bucket
-	configFile, err := driver.ReadConfigFile(ctx, configBucket, configFileKey)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	// Setting up resources
+	//Setting up resources
 	err = driver.CreateJobBucket(ctx)
 	if err != nil {
 		fmt.Println(err)
@@ -50,14 +36,15 @@ func main() {
 		return
 	}
 
-	mappings, err := driver.GenerateMappings(ctx, configFile.InputBuckets)
+	mappings, err := driver.GenerateMappings(ctx, driver.Config.InputBuckets)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	err = driver.StartMappers(ctx, mappings, mapperFunctionName)
+	err = driver.StartMappers(ctx, mappings, driver.Config.MapperFuncName)
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
 }

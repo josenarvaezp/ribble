@@ -21,28 +21,41 @@ type DriverInterface interface {
 	CreateJobBucket(ctx context.Context) error
 	CreateCoordinatorNotification(ctx context.Context) error
 	CreateQueues(ctx context.Context, numQueues int)
-	ReadConfigFile(ctx context.Context, bucket string, key string) (*ConfigFile, error)
 }
 
 // Driver is a struct that implements the Driver interface
 type Driver struct {
-	jobID        uuid.UUID
+	jobID     uuid.UUID
+	jobBucket string
+	// clients
 	s3Client     *s3.Client
 	lambdaClient *lambda.Client
 	sqsClient    *sqs.Client
+	// user config
+	Config Config
 }
 
 // NewDriver creates a new Driver struct
-func NewDriver(jobID uuid.UUID, region string, local bool) (*Driver, error) {
+func NewDriver(jobID uuid.UUID, configFilePath string) (*Driver, error) {
 	var cfg aws.Config
 	var err error
 
 	// init driver with job id
 	driver := &Driver{
-		jobID: jobID,
+		jobID:     jobID,
+		jobBucket: fmt.Sprintf("%s-%s", "displ", jobID.String()),
 	}
 
-	if local {
+	// set config values to driver
+	conf, err := ReadLocalConfigFile(configFilePath)
+	if err != nil {
+		// TODO: add logs
+		fmt.Println(err)
+		return nil, err
+	}
+	driver.Config = *conf
+
+	if driver.Config.Local {
 		// point clients to localstack
 		cfg, err = config.InitLocalCfg()
 		if err != nil {
@@ -52,7 +65,7 @@ func NewDriver(jobID uuid.UUID, region string, local bool) (*Driver, error) {
 		}
 	} else {
 		// Load the configuration using the aws config file
-		cfg, err = config.InitCfg(region)
+		cfg, err = config.InitCfg(driver.Config.Region)
 		if err != nil {
 			// TODO: add logs
 			fmt.Println(err)

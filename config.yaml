@@ -1,0 +1,12 @@
+input:
+  - name: mybucket
+    keys:
+      - file1.csv
+      - file2.csv
+  - name: mysecondbucket
+    keys:
+      - file3.csv
+output: mybucketoutput
+region: eu-west-2
+mapperFuncName: mymapper
+local: false
