@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/josenarvaezp/displ/internal/config"
+	"github.com/josenarvaezp/displ/internal/faas"
 	"github.com/josenarvaezp/displ/internal/objectstore"
+	"github.com/josenarvaezp/displ/internal/queues"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -28,9 +30,9 @@ type Driver struct {
 	jobID     uuid.UUID
 	jobBucket string
 	// clients
-	s3Client     *s3.Client
-	lambdaClient *lambda.Client
-	sqsClient    *sqs.Client
+	ObjectStoreAPI objectstore.ObjectStoreAPI
+	FaasAPI        faas.FaasAPI
+	QueuesAPI      queues.QueuesAPI
 	// user config
 	Config Config
 }
@@ -74,11 +76,11 @@ func NewDriver(jobID uuid.UUID, configFilePath string) (*Driver, error) {
 	}
 
 	// create and add clients to driver
-	driver.s3Client = s3.NewFromConfig(cfg, func(o *s3.Options) {
+	driver.ObjectStoreAPI = s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
-	driver.lambdaClient = lambda.NewFromConfig(cfg)
-	driver.sqsClient = sqs.NewFromConfig(cfg)
+	driver.FaasAPI = lambda.NewFromConfig(cfg)
+	driver.QueuesAPI = sqs.NewFromConfig(cfg)
 
 	return driver, nil
 }

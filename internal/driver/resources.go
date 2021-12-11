@@ -23,7 +23,7 @@ func (d *Driver) CreateJobBucket(ctx context.Context) error {
 		},
 	}
 
-	_, err := d.s3Client.CreateBucket(ctx, params, nil)
+	_, err := d.ObjectStoreAPI.CreateBucket(ctx, params, nil)
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -54,7 +54,7 @@ func (d *Driver) CreateCoordinatorNotification(ctx context.Context) error {
 		StatementId:  &statementId,
 		SourceArn:    &sourceARN,
 	}
-	_, err := d.lambdaClient.AddPermission(ctx, permissionInput)
+	_, err := d.FaasAPI.AddPermission(ctx, permissionInput)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func (d *Driver) CreateCoordinatorNotification(ctx context.Context) error {
 			},
 		},
 	}
-	_, err = d.s3Client.PutBucketNotificationConfiguration(ctx, notificationConfigInput)
+	_, err = d.ObjectStoreAPI.PutBucketNotificationConfiguration(ctx, notificationConfigInput)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -105,7 +105,7 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 		QueueName: &dlqName,
 	}
 
-	dlqOutput, err := d.sqsClient.CreateQueue(ctx, dlqParams)
+	dlqOutput, err := d.QueuesAPI.CreateQueue(ctx, dlqParams)
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -134,7 +134,7 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 				"VisibilityTimeout": "60", // TODO: configure
 			},
 		}
-		_, err := d.sqsClient.CreateQueue(ctx, params)
+		_, err := d.QueuesAPI.CreateQueue(ctx, params)
 		if err != nil {
 			fmt.Println(err)
 			return err

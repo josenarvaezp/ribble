@@ -1,5 +1,31 @@
 package objectstore
 
+import (
+	"context"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+)
+
+// ObjectStoreAPI is an interface used to mock API calls made to the aws S3 service
+type ObjectStoreAPI interface {
+	ListObjectsV2(
+		ctx context.Context,
+		params *s3.ListObjectsV2Input,
+		optFns ...func(*s3.Options),
+	) (*s3.ListObjectsV2Output, error)
+	CreateBucket(
+		ctx context.Context,
+		params *s3.CreateBucketInput,
+		optFns ...func(*s3.Options),
+	) (*s3.CreateBucketOutput, error)
+	PutBucketNotificationConfiguration(
+		ctx context.Context,
+		params *s3.PutBucketNotificationConfigurationInput,
+		optFns ...func(*s3.Options),
+	) (*s3.PutBucketNotificationConfigurationOutput, error)
+}
+
 // Object represent a cloud object
 type Object struct {
 	Bucket string
@@ -27,4 +53,21 @@ func NewObjectWithRange(object Object, initialByte int64, finalByte int64) Objec
 		InitialByte: initialByte,
 		FinalByte:   finalByte,
 	}
+}
+
+func s3ObjectToObject(bucket string, s3Object types.Object) Object {
+	return Object{
+		Bucket: bucket,
+		Key:    *s3Object.Key,
+		Size:   s3Object.Size,
+	}
+}
+
+func S3ObjectsToObjects(bucket string, s3Objects []types.Object) []Object {
+	objects := make([]Object, len(s3Objects))
+	for i, s3Object := range s3Objects {
+		objects[i] = s3ObjectToObject(bucket, s3Object)
+	}
+
+	return objects
 }

@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	s3Types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/google/uuid"
 
 	"github.com/josenarvaezp/displ/internal/objectstore"
@@ -78,7 +77,7 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context, inputBucke
 				ContinuationToken: continuationToken,
 			}
 
-			listObjectsOuput, err := d.s3Client.ListObjectsV2(ctx, params)
+			listObjectsOuput, err := d.ObjectStoreAPI.ListObjectsV2(ctx, params)
 			if err != nil {
 				fmt.Println(err)
 				return nil, err
@@ -90,7 +89,7 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context, inputBucke
 			// check if there are more objects remaining
 			moreObjects = listObjectsOuput.IsTruncated
 
-			objects := s3ObjectsToObjects(bucket.Name, listObjectsOuput.Contents)
+			objects := objectstore.S3ObjectsToObjects(bucket.Name, listObjectsOuput.Contents)
 			partialMappings := generateMappingsForCompleteObjects(objects, lastMapping)
 
 			if !moreObjects && i == len(inputBuckets)-1 {
@@ -141,23 +140,6 @@ func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMappin
 	return partialMappings
 }
 
-func s3ObjectToObject(bucket string, s3Object s3Types.Object) objectstore.Object {
-	return objectstore.Object{
-		Bucket: bucket,
-		Key:    *s3Object.Key,
-		Size:   s3Object.Size,
-	}
-}
-
-func s3ObjectsToObjects(bucket string, s3Objects []s3Types.Object) []objectstore.Object {
-	objects := make([]objectstore.Object, len(s3Objects))
-	for i, s3Object := range s3Objects {
-		objects[i] = s3ObjectToObject(bucket, s3Object)
-	}
-
-	return objects
-}
-
 // StartMappers sends the each split into lambda
 func (s *Driver) StartMappers(ctx context.Context, mappings []*mapping, functionName string) error {
 	for _, currentMapping := range mappings {
@@ -169,7 +151,7 @@ func (s *Driver) StartMappers(ctx context.Context, mappings []*mapping, function
 		}
 
 		// send the mapping split into lamda
-		result, _ := s.lambdaClient.Invoke(
+		result, _ := s.FaasAPI.Invoke(
 			ctx,
 			&lambda.InvokeInput{
 				FunctionName:   aws.String(functionName),
