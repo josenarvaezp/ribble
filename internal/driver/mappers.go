@@ -9,6 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3Types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/google/uuid"
 
 	"github.com/josenarvaezp/displ/internal/objectstore"
@@ -29,9 +31,9 @@ import (
 // -DLQ: https://aws.github.io/aws-sdk-go-v2/docs/code-examples/sqs/deadletterqueue/
 
 const (
-	MB          int64 = 1048576
-	chunkSize   int64 = 64 * MB // size of chunks in bytes
-	successCode int32 = 202     // sucessful code for asynchronous lambda invokation
+	MB           int64 = 1048576
+	CHUNK_SIZE   int64 = 64 * MB // size of chunks in bytes
+	SUCCESS_CODE int32 = 202     // sucessful code for asynchronous lambda invokation
 )
 
 // mapping represents the collection of objects that are used as input
@@ -51,73 +53,109 @@ func newMapping() *mapping {
 	}
 }
 
-// generateMapping generates the input for the mappers. Each mapping has a map id, a list of objects
-// where each object has a specified range and the size of it.
-func (s *Driver) GenerateMappings(ctx context.Context, inputBuckets []*objectstore.Bucket) ([]*mapping, error) {
+// GenerateMappingsCompleteObjects generates map batches such that each individual file is in a single batch.
+// Note that if the file doesn't fit in a batch it will be ignored. This allow users to process file where
+// the whole file is needed by a single mapper. An example is an aplication where the user wants to process
+// images using AI, and for this each image needs to be fed into the algorithm.
+func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context, inputBuckets []*objectstore.Bucket) ([]*mapping, error) {
 	// init mappings
-	currentMapping := 0
 	mappings := []*mapping{}
 	firstMapping := newMapping()
-	mappings = append(mappings, firstMapping)
+	lastMapping := firstMapping
 
-	// get all objects across buckets
-	objects := objectstore.BucketsToObjects(inputBuckets)
+	// used for pagination in the list objects call
+	var continuationToken *string
 
-	for _, object := range objects {
-		availableSpace := chunkSize - mappings[currentMapping].size
-		// move to next mapping if there is no space in current mapping
-		if availableSpace == 0 {
-			nextMapping := newMapping()
-			mappings = append(mappings, nextMapping)
-			currentMapping++
-		}
+	// generate mappings for all buckets
+	for i, bucket := range inputBuckets {
+		// indifcates if there are more objects to be listed
+		moreObjects := true
 
-		// read object size from s3
-		currentObjectSize, err := objectstore.GetObjectSize(ctx, s.s3Client, object)
-		if err != nil {
-			fmt.Println(err)
-			// TODO: info should be logged if we get this error
-			return nil, err
-		}
+		for moreObjects {
+			params := &s3.ListObjectsV2Input{
+				Bucket:            &bucket.Name,
+				MaxKeys:           1000,
+				ContinuationToken: continuationToken,
+			}
 
-		if currentObjectSize <= availableSpace {
-			// current object fits in mapping
-			objectWithRange := objectstore.NewObjectWithRange(object, 1, currentObjectSize)
-			mappings[currentMapping].objects = append(mappings[currentMapping].objects, objectWithRange)
-			mappings[currentMapping].size = mappings[currentMapping].size + currentObjectSize
-		} else {
-			// current object doesn't fit in mapping
-			var mappedBytes int64
-			mappedBytes = 0
-			remainingBytes := currentObjectSize
+			listObjectsOuput, err := d.s3Client.ListObjectsV2(ctx, params)
+			if err != nil {
+				fmt.Println(err)
+				return nil, err
+			}
 
-			// loop until there are no bytes to map for the current object
-			for remainingBytes != 0 {
-				if remainingBytes <= availableSpace {
-					// remaining bytes fit in the current mapping
-					objectWithRange := objectstore.NewObjectWithRange(object, mappedBytes+1, remainingBytes)
-					mappings[currentMapping].objects = append(mappings[currentMapping].objects, objectWithRange)
-					mappings[currentMapping].size = mappings[currentMapping].size + remainingBytes
-					break
-				} else {
-					// remaining bytes don't fit in current mapping, add as much as possible
-					objectWithRange := objectstore.NewObjectWithRange(object, mappedBytes+1, mappedBytes+availableSpace)
-					mappings[currentMapping].objects = append(mappings[currentMapping].objects, objectWithRange)
-					mappings[currentMapping].size = mappings[currentMapping].size + availableSpace
-					mappedBytes = mappedBytes + availableSpace
-					remainingBytes = remainingBytes - availableSpace
+			// update pagination token
+			continuationToken = listObjectsOuput.NextContinuationToken
 
-					// move to next mapping
-					nextMapping := newMapping()
-					mappings = append(mappings, nextMapping)
-					currentMapping++
+			// check if there are more objects remaining
+			moreObjects = listObjectsOuput.IsTruncated
 
-					availableSpace = chunkSize - mappings[currentMapping].size
-				}
+			objects := s3ObjectsToObjects(bucket.Name, listObjectsOuput.Contents)
+			partialMappings := generateMappingsForCompleteObjects(objects, lastMapping)
+
+			if !moreObjects && i == len(inputBuckets)-1 {
+				// last iteration of list results, add last mapping
+				mappings = append(mappings, partialMappings...)
+			} else {
+				// there are more items for the list operation
+				// do not add last mapping as it will be added in the next list
+				lastMapping = partialMappings[len(partialMappings)-1]
+				partialMappings[len(partialMappings)-1] = nil // Erase element
+				partialMappingsMinusLast := partialMappings[:len(partialMappings)-1]
+
+				mappings = append(mappings, partialMappingsMinusLast...)
 			}
 		}
 	}
+
 	return mappings, nil
+}
+
+// GenerateMappingsForCompleteObjects is a helper function that generates batches where each file
+// needs to fit in a single batch
+func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMapping *mapping) []*mapping {
+	partialMappings := []*mapping{lastMapping}
+	currentMapping := 0
+
+	for _, object := range objects {
+		if object.Size > CHUNK_SIZE {
+			// object doesn't fit anywhere, ignore object
+			// TODO: inform user object doesn't fit
+			continue
+		}
+
+		availableSpace := CHUNK_SIZE - partialMappings[currentMapping].size
+		if object.Size > availableSpace {
+			// current object doesn't fit in mapping
+			nextMapping := newMapping()
+			partialMappings = append(partialMappings, nextMapping)
+			currentMapping++
+		}
+
+		// add current object to mapping
+		objectWithRange := objectstore.NewObjectWithRange(object, 1, object.Size)
+		partialMappings[currentMapping].objects = append(partialMappings[currentMapping].objects, objectWithRange)
+		partialMappings[currentMapping].size = partialMappings[currentMapping].size + object.Size
+	}
+
+	return partialMappings
+}
+
+func s3ObjectToObject(bucket string, s3Object s3Types.Object) objectstore.Object {
+	return objectstore.Object{
+		Bucket: bucket,
+		Key:    *s3Object.Key,
+		Size:   s3Object.Size,
+	}
+}
+
+func s3ObjectsToObjects(bucket string, s3Objects []s3Types.Object) []objectstore.Object {
+	objects := make([]objectstore.Object, len(s3Objects))
+	for i, s3Object := range s3Objects {
+		objects[i] = s3ObjectToObject(bucket, s3Object)
+	}
+
+	return objects
 }
 
 // StartMappers sends the each split into lambda
@@ -142,7 +180,7 @@ func (s *Driver) StartMappers(ctx context.Context, mappings []*mapping, function
 
 		// error is ignored from asynch invokation and result only holds the status code
 		// check status code
-		if result.StatusCode != successCode {
+		if result.StatusCode != SUCCESS_CODE {
 			// TODO: stop execution and inform the user about the errors
 			return errors.New("Error starting mappers")
 		}

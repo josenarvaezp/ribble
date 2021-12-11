@@ -36,7 +36,7 @@ func main() {
 		return
 	}
 
-	mappings, err := driver.GenerateMappings(ctx, driver.Config.InputBuckets)
+	mappings, err := driver.GenerateMappingsCompleteObjects(ctx, driver.Config.InputBuckets)
 	if err != nil {
 		fmt.Println(err)
 		return
