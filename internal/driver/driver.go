@@ -16,7 +16,7 @@ import (
 
 // DriverInterface defines the methods available for the Driver
 type DriverInterface interface {
-	GenerateMappings(context.Context, []objectstore.Object) ([]mapping, error)
+	GenerateMappingsCompleteObjects(ctx context.Context, inputBuckets []*objectstore.Bucket) ([]*mapping, error)
 	StartMappers(ctx context.Context, mappings []*mapping, functionName string, region string) error
 	CreateJobBucket(ctx context.Context) error
 	CreateCoordinatorNotification(ctx context.Context) error
