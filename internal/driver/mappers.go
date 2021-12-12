@@ -35,20 +35,22 @@ const (
 	SUCCESS_CODE int32 = 202     // sucessful code for asynchronous lambda invokation
 )
 
-// mapping represents the collection of objects that are used as input
-// for the mapping stage of the framework. Each mapper recieves an
+// Mapping represents the collection of objects that are used as input
+// for the Mapping stage of the framework. Each mapper recieves an
 // input which may contain one or multiple objects, depeding on their size.
-type mapping struct {
-	mapID   uuid.UUID
-	objects []objectstore.ObjectRange
-	size    int64
+type Mapping struct {
+	JobBucket string                    `json:"bucket"`
+	MapID     uuid.UUID                 `json:"id"`
+	Objects   []objectstore.ObjectRange `json:"rangeObjects"`
+	Size      int64                     `json:"size"`
+	NumQueues int64                     `json:"queues"`
 }
 
-// newMapping initialises the mapping with an id and size 0
-func newMapping() *mapping {
-	return &mapping{
-		mapID: uuid.New(),
-		size:  0,
+// newMapping initialises the M with an id and size 0
+func newMapping() *Mapping {
+	return &Mapping{
+		MapID: uuid.New(),
+		Size:  0,
 	}
 }
 
@@ -56,9 +58,9 @@ func newMapping() *mapping {
 // Note that if the file doesn't fit in a batch it will be ignored. This allow users to process file where
 // the whole file is needed by a single mapper. An example is an aplication where the user wants to process
 // images using AI, and for this each image needs to be fed into the algorithm.
-func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context, inputBuckets []*objectstore.Bucket) ([]*mapping, error) {
+func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context, inputBuckets []*objectstore.Bucket) ([]*Mapping, error) {
 	// init mappings
-	mappings := []*mapping{}
+	mappings := []*Mapping{}
 	firstMapping := newMapping()
 	lastMapping := firstMapping
 
@@ -112,8 +114,8 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context, inputBucke
 
 // GenerateMappingsForCompleteObjects is a helper function that generates batches where each file
 // needs to fit in a single batch
-func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMapping *mapping) []*mapping {
-	partialMappings := []*mapping{lastMapping}
+func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMapping *Mapping) []*Mapping {
+	partialMappings := []*Mapping{lastMapping}
 	currentMapping := 0
 
 	for _, object := range objects {
@@ -123,7 +125,7 @@ func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMappin
 			continue
 		}
 
-		availableSpace := CHUNK_SIZE - partialMappings[currentMapping].size
+		availableSpace := CHUNK_SIZE - partialMappings[currentMapping].Size
 		if object.Size > availableSpace {
 			// current object doesn't fit in mapping
 			nextMapping := newMapping()
@@ -133,15 +135,15 @@ func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMappin
 
 		// add current object to mapping
 		objectWithRange := objectstore.NewObjectWithRange(object, 1, object.Size)
-		partialMappings[currentMapping].objects = append(partialMappings[currentMapping].objects, objectWithRange)
-		partialMappings[currentMapping].size = partialMappings[currentMapping].size + object.Size
+		partialMappings[currentMapping].Objects = append(partialMappings[currentMapping].Objects, objectWithRange)
+		partialMappings[currentMapping].Size = partialMappings[currentMapping].Size + object.Size
 	}
 
 	return partialMappings
 }
 
 // StartMappers sends the each split into lambda
-func (s *Driver) StartMappers(ctx context.Context, mappings []*mapping, functionName string) error {
+func (s *Driver) StartMappers(ctx context.Context, mappings []*Mapping, functionName string) error {
 	for _, currentMapping := range mappings {
 		// create payload describing split
 		requestPayload, err := json.Marshal(*currentMapping)

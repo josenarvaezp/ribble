@@ -35,9 +35,10 @@ type Object struct {
 
 // ObjectRange represents an cloud object with its range specified
 type ObjectRange struct {
-	Object      Object
-	InitialByte int64
-	FinalByte   int64
+	Bucket      string `json:"objectBucket"`
+	Key         string `json:"objectKey"`
+	InitialByte int64  `json:"initialByte"`
+	FinalByte   int64  `json:"finalByte"`
 }
 
 // Bucket represents a cloud bucket
@@ -49,7 +50,8 @@ type Bucket struct {
 // NewObjectWithRange creates a new objectRange
 func NewObjectWithRange(object Object, initialByte int64, finalByte int64) ObjectRange {
 	return ObjectRange{
-		Object:      object,
+		Bucket:      object.Bucket,
+		Key:         object.Key,
 		InitialByte: initialByte,
 		FinalByte:   finalByte,
 	}
