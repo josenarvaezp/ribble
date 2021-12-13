@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
+	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -52,7 +53,7 @@ func HandleRequest(ctx context.Context, request driver.Mapping) (string, error) 
 
 	for _, object := range request.Objects {
 		// download file
-		err := downloadFile(
+		filename, err := downloadFile(
 			object.Bucket,
 			object.Key,
 			object.InitialByte,
@@ -64,10 +65,7 @@ func HandleRequest(ctx context.Context, request driver.Mapping) (string, error) 
 		}
 
 		// user function starts here
-		mapOutput := map[string]int{
-			"hello": 2,
-			"hi":    3,
-		}
+		mapOutput := runMapper(*filename, myfunction)
 
 		// send output to reducers via queues
 		err = emitMap(mapOutput, request.NumQueues, batchMetadata)
@@ -77,7 +75,11 @@ func HandleRequest(ctx context.Context, request driver.Mapping) (string, error) 
 		}
 
 		// clean up file in /tmp
-		// TODO
+		err = os.Remove(*filename)
+		if err != nil {
+			fmt.Println(err)
+			return "", err
+		}
 	}
 
 	// write batch metadata to S3
@@ -100,7 +102,33 @@ func HandleRequest(ctx context.Context, request driver.Mapping) (string, error) 
 
 func main() {
 	lambda.Start(HandleRequest)
-	// testing()
+}
+
+func runMapper(filename string, userMap func(filename string) map[string]int) map[string]int {
+	return userMap(filename)
+}
+
+func myfunction(filename string) map[string]int {
+	csvFile, err := os.Open(filename)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer csvFile.Close()
+
+	csvLines, err := csv.NewReader(csvFile).ReadAll()
+	if err != nil {
+		fmt.Println(err)
+	}
+	output := make(map[string]int)
+	for _, line := range csvLines {
+		count, err := strconv.Atoi(line[5])
+		if err != nil {
+			// ignore value
+		}
+		output[line[1]] = output[line[1]] + count
+	}
+
+	return output
 }
 
 // TODO add json notation
@@ -148,11 +176,9 @@ func emitMap(output map[string]int, numQueues int64, batchMetadata map[string]in
 		// be much simpler given that a reducer will only need to know the number of
 		// batches that the mapper sent rather that the number of batches and for
 		// each batch how many items
-		extraValuesForBatch := make([]mapInt, 10-len(valuesInBatch))
-		for i := range extraValuesForBatch {
-			extraValuesForBatch[i] = mapInt{} // nil value
+		for i := 0; i < 10-len(valuesInBatch); i++ {
+			valuesInBatch = append(valuesInBatch, mapInt{}) // append nil value
 		}
-		batches[key] = append(batches[key], extraValuesForBatch...)
 
 		// send batch
 		sendBatch()
@@ -182,7 +208,6 @@ func writeBlankFile() {
 }
 
 func writeBatchMetadata(ctx context.Context, bucket, key string, batchMetadata map[string]int64, uploader *manager.Uploader) error {
-
 	// encode map to JSON
 	p, err := json.Marshal(batchMetadata)
 	if err != nil {
@@ -212,16 +237,16 @@ func getQueuePartition(key string, numQueues int64) string {
 	h.Write([]byte(key))
 	hexstr := hex.EncodeToString(h.Sum(nil))
 	bi.SetString(hexstr, 16)
-	partitionQueue := int(bi.Int64() % numQueues)
+	partitionQueue := int(bi.Uint64() % uint64(numQueues))
 
 	return strconv.Itoa(partitionQueue)
 }
 
-func downloadFile(bucket, key string, initialByte, finalByte int64) error {
+func downloadFile(bucket, key string, initialByte, finalByte int64) (*string, error) {
 	file, err := os.Create(filepath.Join("/tmp", key))
 	if err != nil {
 		fmt.Println(err)
-		return err
+		return nil, err
 	}
 
 	objectRange := fmt.Sprintf("bytes=%d-%d", initialByte, finalByte)
@@ -234,14 +259,15 @@ func downloadFile(bucket, key string, initialByte, finalByte int64) error {
 	bytesRead, err := downloader.Download(context.Background(), file, input)
 	if err != nil {
 		fmt.Println(err)
-		return err
+		return nil, err
 	}
 
 	// check that the bytes read match expectation
 	if bytesRead != finalByte-initialByte {
 		fmt.Println(err)
-		return errors.New("File was not read correctly")
+		return nil, errors.New("File was not read correctly")
 	}
 
-	return nil
+	filename := file.Name()
+	return &filename, nil
 }
