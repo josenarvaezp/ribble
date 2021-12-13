@@ -30,14 +30,16 @@ var uploader *manager.Uploader
 
 func init() {
 	// TODO: add proper configuration
-	cfg, err := conf.InitLocalCfg()
+	cfg, err := conf.InitLocalLambdaCfg()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	// Create an S3 client using the loaded configuration
-	s3Client := s3.NewFromConfig(cfg)
+	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.UsePathStyle = true
+	})
 
 	// Create a S3 downloader and uploader
 	downloader = manager.NewDownloader(s3Client)
