@@ -13,11 +13,16 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
+	"github.com/google/uuid"
 	conf "github.com/josenarvaezp/displ/internal/config"
 	"github.com/josenarvaezp/displ/internal/driver"
 )
@@ -28,6 +33,8 @@ import (
 
 var downloader *manager.Downloader
 var uploader *manager.Uploader
+var sqsClient *sqs.Client
+var region string
 
 func init() {
 	// TODO: add proper configuration
@@ -45,9 +52,25 @@ func init() {
 	// Create a S3 downloader and uploader
 	downloader = manager.NewDownloader(s3Client)
 	uploader = manager.NewUploader(s3Client)
+
+	// create sqs client
+	sqsClient = sqs.NewFromConfig(cfg)
+
+	// get region from env var
+	region = os.Getenv("AWS_REGION")
 }
 
 func HandleRequest(ctx context.Context, request driver.Mapping) (string, error) {
+	// get data from context
+	lc, ok := lambdacontext.FromContext(ctx)
+	if !ok {
+		return "", errors.New("Error getting lambda context")
+	}
+	accountID := strings.Split(lc.InvokedFunctionArn, ":")[4]
+
+	fmt.Println("Account id")
+	fmt.Println(accountID)
+
 	// keep a dictionary with the number of batches
 	batchMetadata := make(map[string]int64)
 
@@ -68,7 +91,7 @@ func HandleRequest(ctx context.Context, request driver.Mapping) (string, error) 
 		mapOutput := runMapper(*filename, myfunction)
 
 		// send output to reducers via queues
-		err = emitMap(mapOutput, request.NumQueues, batchMetadata)
+		err = emitMap(ctx, region, accountID, request.MapID, mapOutput, request.NumQueues, batchMetadata)
 		if err != nil {
 			fmt.Println(err)
 			return "", err
@@ -131,15 +154,23 @@ func myfunction(filename string) map[string]int {
 	return output
 }
 
-// TODO add json notation
 type mapInt struct {
-	key   string
-	value int
+	key   string `json:"key"`
+	value int    `json:"value"`
 }
 
-func emitMap(output map[string]int, numQueues int64, batchMetadata map[string]int64) error {
+func emitMap(
+	ctx context.Context,
+	region string,
+	accountID string,
+	mapID uuid.UUID,
+	output map[string]int,
+	numQueues int64,
+	batchMetadata map[string]int64,
+) error {
 	// keep dictionary of batches to allow sending keys in batches
 	batches := make(map[string][]mapInt)
+	batchCount := 0
 
 	for key, value := range output {
 		// get partition queue from key
@@ -156,8 +187,21 @@ func emitMap(output map[string]int, numQueues int64, batchMetadata map[string]in
 
 		// flush batch if it has 10 items
 		if len(batches[partitionQueue]) == 10 {
-			// send to queue
-			sendBatch()
+			// increase number of batches
+			batchCount++
+
+			// send batch to queue
+			input := &sendBatchInput{
+				mapID:          mapID,
+				partitionQueue: partitionQueue,
+				batchID:        batchCount,
+				batch:          batches[partitionQueue],
+				region:         region,
+				accountID:      accountID,
+			}
+			if err := sendBatch(ctx, input, sqsClient); err != nil {
+				return err
+			}
 
 			// update batch metadata
 			batchMetadata[partitionQueue] = batchMetadata[partitionQueue] + int64(1)
@@ -169,6 +213,8 @@ func emitMap(output map[string]int, numQueues int64, batchMetadata map[string]in
 
 	// flush all remaining batches that don't have 10 values
 	for key, valuesInBatch := range batches {
+		// increase number of batches
+		batchCount++
 
 		// add values until we complete the batch
 		// Note that while this is a little more inefficient for the mapper
@@ -180,8 +226,18 @@ func emitMap(output map[string]int, numQueues int64, batchMetadata map[string]in
 			valuesInBatch = append(valuesInBatch, mapInt{}) // append nil value
 		}
 
-		// send batch
-		sendBatch()
+		// send batch to queue
+		input := &sendBatchInput{
+			mapID:          mapID,
+			partitionQueue: key,
+			batchID:        batchCount,
+			batch:          batches[key],
+			region:         region,
+			accountID:      accountID,
+		}
+		if err := sendBatch(ctx, input, sqsClient); err != nil {
+			return err
+		}
 
 		// update batch metadata
 		batchMetadata[key] = batchMetadata[key] + int64(1)
@@ -190,8 +246,75 @@ func emitMap(output map[string]int, numQueues int64, batchMetadata map[string]in
 	return nil
 }
 
-func sendBatch() {
-	// TODO: unimplemented
+type sendBatchInput struct {
+	mapID          uuid.UUID
+	partitionQueue string
+	batchID        int
+	batch          []mapInt
+	region         string
+	accountID      string
+}
+
+func sendBatch(ctx context.Context, input *sendBatchInput, sqsClient *sqs.Client) error {
+	numberDataType := "Number"
+	stringDataType := "String"
+
+	// convert batch to message entries
+	messsageEntries := make([]types.SendMessageBatchRequestEntry, len(input.batch))
+	for i, message := range input.batch {
+		messageID := strconv.Itoa(i) // unique message id within batch
+		mapID := input.mapID.String()
+		batchID := strconv.Itoa(input.batchID)
+
+		// encode map input into JSON
+		p, err := json.Marshal(message)
+		if err != nil {
+			return err
+		}
+		messageJSONString := string(p)
+
+		messsageEntries[i] = types.SendMessageBatchRequestEntry{
+			Id:          &messageID,
+			MessageBody: &messageJSONString,
+			MessageAttributes: map[string]types.MessageAttributeValue{
+				"map-id": {
+					DataType:    &stringDataType,
+					StringValue: &mapID,
+				},
+				"batch-id": {
+					DataType:    &numberDataType,
+					StringValue: &batchID,
+				},
+			},
+		}
+	}
+
+	queueName := input.partitionQueue
+	// queueURL := fmt.Sprintf(
+	// 	"https://sqs.%s.amazonaws.com/%s/%s",
+	// 	input.region,
+	// 	input.accountID,
+	// 	queueName,
+	// )
+	queueURL := fmt.Sprintf(
+		"https://localstack:4566/queue/%s",
+		queueName,
+	)
+	params := &sqs.SendMessageBatchInput{
+		Entries:  messsageEntries,
+		QueueUrl: &queueURL,
+	}
+	output, err := sqsClient.SendMessageBatch(ctx, params)
+	if err != nil {
+		return err
+	}
+
+	if len(output.Failed) != 0 {
+		// TODO: retry
+		fmt.Println("some messages were not sent")
+	}
+
+	return nil
 }
 
 func writeBlankFile() {
