@@ -18,7 +18,9 @@ import (
 func InitLocalCfg() (aws.Config, error) {
 	localstackEndpointResolver := aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
 		return aws.Endpoint{
-			URL: "https://127.0.0.1:4566",
+			PartitionID:   "aws",
+			URL:           "https://127.0.0.1:4566",
+			SigningRegion: "eu-west-2",
 		}, nil
 	})
 

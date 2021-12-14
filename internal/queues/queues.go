@@ -13,4 +13,9 @@ type QueuesAPI interface {
 		params *sqs.CreateQueueInput,
 		optFns ...func(*sqs.Options),
 	) (*sqs.CreateQueueOutput, error)
+	GetQueueAttributes(
+		ctx context.Context,
+		params *sqs.GetQueueAttributesInput,
+		optFns ...func(*sqs.Options),
+	) (*sqs.GetQueueAttributesOutput, error)
 }

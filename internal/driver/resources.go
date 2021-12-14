@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3Types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 )
 
 // CreateJobBucket creates a bucket for the job. This bucket is used as the working directory
@@ -23,7 +23,7 @@ func (d *Driver) CreateJobBucket(ctx context.Context) error {
 		},
 	}
 
-	_, err := d.ObjectStoreAPI.CreateBucket(ctx, params, nil)
+	_, err := d.ObjectStoreAPI.CreateBucket(ctx, params)
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -112,9 +112,19 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 	}
 
 	// create policy and convert it to json
-	dlqARN := GetQueueArnFromURL(dlqOutput.QueueUrl)
+	getQueueAttributesParams := &sqs.GetQueueAttributesInput{
+		QueueUrl:       dlqOutput.QueueUrl,
+		AttributeNames: []types.QueueAttributeName{types.QueueAttributeNameQueueArn},
+	}
+	attributes, err := d.QueuesAPI.GetQueueAttributes(ctx, getQueueAttributesParams)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	dlqARN := attributes.Attributes["QueueArn"]
+
 	policy := map[string]string{
-		"deadLetterTargetArn": *dlqARN,
+		"deadLetterTargetArn": dlqARN,
 		"maxReceiveCount":     "3", // three retries
 	}
 
@@ -145,14 +155,4 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 	time.Sleep(1 * time.Second)
 
 	return nil
-}
-
-// GetQueueArnFromURL creates the ARN of a queue based on its URL
-func GetQueueArnFromURL(queueURL *string) *string {
-	parts := strings.Split(*queueURL, "/")
-	subParts := strings.Split(parts[2], ".")
-
-	arn := "arn:aws:" + subParts[0] + ":" + subParts[1] + ":" + parts[3] + ":" + parts[4]
-
-	return &arn
 }
