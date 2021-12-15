@@ -36,6 +36,11 @@ var uploader *manager.Uploader
 var sqsClient *sqs.Client
 var region string
 
+type MapperInput struct {
+	JobID   uuid.UUID      `json:"jobID"`
+	Mapping driver.Mapping `json:"mapping"`
+}
+
 func init() {
 	// TODO: add proper configuration
 	cfg, err := conf.InitLocalLambdaCfg()
@@ -60,7 +65,7 @@ func init() {
 	region = os.Getenv("AWS_REGION")
 }
 
-func HandleRequest(ctx context.Context, request driver.Mapping) (string, error) {
+func HandleRequest(ctx context.Context, request MapperInput) (string, error) {
 	// get data from context
 	lc, ok := lambdacontext.FromContext(ctx)
 	if !ok {
@@ -74,7 +79,7 @@ func HandleRequest(ctx context.Context, request driver.Mapping) (string, error) 
 	// keep a dictionary with the number of batches
 	batchMetadata := make(map[string]int64)
 
-	for _, object := range request.Objects {
+	for _, object := range request.Mapping.Objects {
 		// download file
 		filename, err := downloadFile(
 			object.Bucket,
@@ -91,7 +96,7 @@ func HandleRequest(ctx context.Context, request driver.Mapping) (string, error) 
 		mapOutput := runMapper(*filename, myfunction)
 
 		// send output to reducers via queues
-		err = emitMap(ctx, region, accountID, request.MapID, mapOutput, request.NumQueues, batchMetadata)
+		err = emitMap(ctx, region, accountID, request.JobID, request.Mapping.MapID, mapOutput, request.Mapping.NumQueues, batchMetadata)
 		if err != nil {
 			fmt.Println(err)
 			return "", err
@@ -108,8 +113,8 @@ func HandleRequest(ctx context.Context, request driver.Mapping) (string, error) 
 	// write batch metadata to S3
 	err := writeBatchMetadata(
 		ctx,
-		request.JobBucket,
-		fmt.Sprintf("metadata/%s", request.MapID.String()),
+		request.Mapping.JobBucket,
+		fmt.Sprintf("metadata/%s", request.Mapping.MapID.String()),
 		batchMetadata,
 		uploader,
 	)
@@ -154,22 +159,23 @@ func myfunction(filename string) map[string]int {
 	return output
 }
 
-type mapInt struct {
-	key   string `json:"key"`
-	value int    `json:"value"`
+type MapInt struct {
+	Key   string `json:"key"`
+	Value int    `json:"value"`
 }
 
 func emitMap(
 	ctx context.Context,
 	region string,
 	accountID string,
+	jobID uuid.UUID,
 	mapID uuid.UUID,
 	output map[string]int,
 	numQueues int64,
 	batchMetadata map[string]int64,
 ) error {
 	// keep dictionary of batches to allow sending keys in batches
-	batches := make(map[string][]mapInt)
+	batches := make(map[string][]MapInt)
 	batchCount := 0
 
 	for key, value := range output {
@@ -179,9 +185,9 @@ func emitMap(
 		// add to batch
 		batches[partitionQueue] = append(
 			batches[partitionQueue],
-			mapInt{
-				key:   key,
-				value: value,
+			MapInt{
+				Key:   key,
+				Value: value,
 			},
 		)
 
@@ -192,6 +198,7 @@ func emitMap(
 
 			// send batch to queue
 			input := &sendBatchInput{
+				jobID:          jobID,
 				mapID:          mapID,
 				partitionQueue: partitionQueue,
 				batchID:        batchCount,
@@ -223,11 +230,13 @@ func emitMap(
 		// batches that the mapper sent rather that the number of batches and for
 		// each batch how many items
 		for i := 0; i < 10-len(valuesInBatch); i++ {
-			valuesInBatch = append(valuesInBatch, mapInt{}) // append nil value
+			// TODO: this is sending empty values because of the json encoding
+			valuesInBatch = append(valuesInBatch, MapInt{}) // append nil value
 		}
 
 		// send batch to queue
 		input := &sendBatchInput{
+			jobID:          jobID,
 			mapID:          mapID,
 			partitionQueue: key,
 			batchID:        batchCount,
@@ -247,10 +256,11 @@ func emitMap(
 }
 
 type sendBatchInput struct {
+	jobID          uuid.UUID
 	mapID          uuid.UUID
 	partitionQueue string
 	batchID        int
-	batch          []mapInt
+	batch          []MapInt
 	region         string
 	accountID      string
 }
@@ -297,7 +307,8 @@ func sendBatch(ctx context.Context, input *sendBatchInput, sqsClient *sqs.Client
 	// 	queueName,
 	// )
 	queueURL := fmt.Sprintf(
-		"https://localstack:4566/queue/%s",
+		"https://localstack:4566/000000000000/%s-%s", // TODO
+		input.jobID.String(),
 		queueName,
 	)
 	params := &sqs.SendMessageBatchInput{

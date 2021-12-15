@@ -134,7 +134,7 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 		return err
 	}
 
-	for i := 1; i <= numQueues; i++ {
+	for i := 0; i < numQueues; i++ {
 		// name of the queues takes the job id as prefix
 		currentQueueName := fmt.Sprintf("%s-%d", d.jobID.String(), i)
 		params := &sqs.CreateQueueInput{

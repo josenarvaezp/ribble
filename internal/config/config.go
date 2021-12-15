@@ -55,7 +55,9 @@ func InitLocalCfg() (aws.Config, error) {
 func InitLocalLambdaCfg() (aws.Config, error) {
 	localstackEndpointResolver := aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
 		return aws.Endpoint{
-			URL: "https://localstack:4566",
+			PartitionID:   "local", // TODO
+			URL:           "https://localstack:4566",
+			SigningRegion: "eu-west-2",
 		}, nil
 	})
 
