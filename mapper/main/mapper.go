@@ -73,10 +73,7 @@ func HandleRequest(ctx context.Context, request MapperInput) (string, error) {
 	}
 	accountID := strings.Split(lc.InvokedFunctionArn, ":")[4]
 
-	fmt.Println("Account id")
-	fmt.Println(accountID)
-
-	// keep a dictionary with the number of batches
+	// keep a dictionary with the number of batches per queue
 	batchMetadata := make(map[string]int64)
 
 	for _, object := range request.Mapping.Objects {
@@ -160,8 +157,9 @@ func myfunction(filename string) map[string]int {
 }
 
 type MapInt struct {
-	Key   string `json:"key"`
-	Value int    `json:"value"`
+	Key      string `json:"key,omitempty"`
+	Value    int    `json:"value,omitempty"`
+	EmptyVal bool   `json:"empty,omitempty"`
 }
 
 func emitMap(
@@ -176,7 +174,6 @@ func emitMap(
 ) error {
 	// keep dictionary of batches to allow sending keys in batches
 	batches := make(map[string][]MapInt)
-	batchCount := 0
 
 	for key, value := range output {
 		// get partition queue from key
@@ -193,15 +190,12 @@ func emitMap(
 
 		// flush batch if it has 10 items
 		if len(batches[partitionQueue]) == 10 {
-			// increase number of batches
-			batchCount++
-
 			// send batch to queue
 			input := &sendBatchInput{
 				jobID:          jobID,
 				mapID:          mapID,
 				partitionQueue: partitionQueue,
-				batchID:        batchCount,
+				batchID:        int(batchMetadata[partitionQueue] + int64(1)),
 				batch:          batches[partitionQueue],
 				region:         region,
 				accountID:      accountID,
@@ -220,27 +214,29 @@ func emitMap(
 
 	// flush all remaining batches that don't have 10 values
 	for key, valuesInBatch := range batches {
-		// increase number of batches
-		batchCount++
-
 		// add values until we complete the batch
 		// Note that while this is a little more inefficient for the mapper
 		// since we could send batches with less values, the reducers logic will
 		// be much simpler given that a reducer will only need to know the number of
 		// batches that the mapper sent rather that the number of batches and for
 		// each batch how many items
-		for i := 0; i < 10-len(valuesInBatch); i++ {
-			// TODO: this is sending empty values because of the json encoding
-			valuesInBatch = append(valuesInBatch, MapInt{}) // append nil value
+		valuesToAppend := make([]MapInt, 10-len(valuesInBatch))
+		for i := 0; i < len(valuesToAppend); i++ {
+			valuesToAppend[i] = MapInt{
+				EmptyVal: true,
+			}
 		}
+
+		// append values to values in batch
+		valuesInBatch = append(valuesInBatch, valuesToAppend...)
 
 		// send batch to queue
 		input := &sendBatchInput{
 			jobID:          jobID,
 			mapID:          mapID,
 			partitionQueue: key,
-			batchID:        batchCount,
-			batch:          batches[key],
+			batchID:        int(batchMetadata[key] + int64(1)),
+			batch:          valuesInBatch,
 			region:         region,
 			accountID:      accountID,
 		}
@@ -294,6 +290,10 @@ func sendBatch(ctx context.Context, input *sendBatchInput, sqsClient *sqs.Client
 				"batch-id": {
 					DataType:    &numberDataType,
 					StringValue: &batchID,
+				},
+				"message-id": {
+					DataType:    &numberDataType,
+					StringValue: &messageID,
 				},
 			},
 		}

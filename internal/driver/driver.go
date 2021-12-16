@@ -28,7 +28,7 @@ type DriverInterface interface {
 // Driver is a struct that implements the Driver interface
 type Driver struct {
 	jobID     uuid.UUID
-	jobBucket string
+	jobBucket string // TODO: remove and use job id as name for bucket
 	// clients
 	ObjectStoreAPI objectstore.ObjectStoreAPI
 	FaasAPI        faas.FaasAPI
