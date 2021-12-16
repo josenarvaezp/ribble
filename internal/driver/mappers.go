@@ -39,7 +39,6 @@ const (
 // for the Mapping stage of the framework. Each mapper recieves an
 // input which may contain one or multiple objects, depeding on their size.
 type Mapping struct {
-	JobBucket string                    `json:"bucket"`
 	MapID     uuid.UUID                 `json:"id"`
 	Objects   []objectstore.ObjectRange `json:"rangeObjects"`
 	Size      int64                     `json:"size"`

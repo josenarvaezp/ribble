@@ -13,15 +13,14 @@ import (
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/driver"
-	intMapper "github.com/josenarvaezp/displ/internal/mapper"
+	"github.com/josenarvaezp/displ/internal/mapper"
 )
 
 // TODO: create different logic when full object is provided
 // this is needed to allow objects to be downloaded concurrently
 // if we use ranges, automatically concurrency does not work
 
-// TODO: rename this package to something else
-var mapper *intMapper.Mapper
+var m *mapper.Mapper
 
 type MapperInput struct {
 	JobID   uuid.UUID      `json:"jobID"`
@@ -30,7 +29,7 @@ type MapperInput struct {
 
 func init() {
 	var err error
-	mapper, err = intMapper.NewMapper(true)
+	m, err = mapper.NewMapper(true)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -43,17 +42,17 @@ func HandleRequest(ctx context.Context, request MapperInput) (string, error) {
 	if !ok {
 		return "", errors.New("Error getting lambda context")
 	}
-	mapper.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
-	mapper.JobID = request.JobID
-	mapper.MapID = request.Mapping.MapID
-	mapper.NumQueues = request.Mapping.NumQueues
+	m.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
+	m.JobID = request.JobID
+	m.MapID = request.Mapping.MapID
+	m.NumQueues = request.Mapping.NumQueues
 
 	// keep a dictionary with the number of batches per queue
 	batchMetadata := make(map[string]int64)
 
 	for _, object := range request.Mapping.Objects {
 		// download file
-		filename, err := mapper.DownloadFile(object)
+		filename, err := m.DownloadFile(object)
 		if err != nil {
 			fmt.Println(err)
 			return "", err
@@ -63,7 +62,7 @@ func HandleRequest(ctx context.Context, request MapperInput) (string, error) {
 		mapOutput := runMapper(*filename, myfunction)
 
 		// send output to reducers via queues
-		err = mapper.EmitMap(ctx, mapOutput, batchMetadata)
+		err = m.EmitMap(ctx, mapOutput, batchMetadata)
 		if err != nil {
 			fmt.Println(err)
 			return "", err
@@ -78,18 +77,12 @@ func HandleRequest(ctx context.Context, request MapperInput) (string, error) {
 	}
 
 	// send batch metadata to S3
-	err := mapper.WriteBatchMetadata(
-		ctx,
-		request.Mapping.JobBucket,
-		fmt.Sprintf("metadata/%s", request.Mapping.MapID.String()),
-		batchMetadata,
-	)
-	if err != nil {
+	if err := m.WriteBatchMetadata(ctx, batchMetadata); err != nil {
 		return "", err
 	}
 
 	// check if this mapper is the last one and write blank file
-	mapper.WriteBlankFile()
+	m.WriteBlankFile()
 
 	return "", nil
 }

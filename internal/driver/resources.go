@@ -16,8 +16,9 @@ import (
 // CreateJobBucket creates a bucket for the job. This bucket is used as the working directory
 // for the job's intermediate output.
 func (d *Driver) CreateJobBucket(ctx context.Context) error {
+	bucket := d.jobID.String()
 	params := &s3.CreateBucketInput{
-		Bucket: &d.jobBucket,
+		Bucket: &bucket,
 		CreateBucketConfiguration: &s3Types.CreateBucketConfiguration{
 			LocationConstraint: s3Types.BucketLocationConstraint(d.Config.Region),
 		},
@@ -38,12 +39,13 @@ func (d *Driver) CreateJobBucket(ctx context.Context) error {
 // the S3 service and invokes the coordinator function.
 func (d *Driver) CreateCoordinatorNotification(ctx context.Context) error {
 	// TODO: create coordinator IAM role with "s3:GetObject" and resource to the folder under the bucket
+	jobBucket := d.jobID.String()
 
 	action := "lambda:InvokeFunction"
 	coordinatorName := "arn:aws:lambda:eu-west-2:694616335238:function:TODO"
 	principal := "s3.amazonaws.com"
 	statementId := "s3invoke"
-	sourceARN := fmt.Sprintf("arn:aws:s3:::%s", d.jobBucket)
+	sourceARN := fmt.Sprintf("arn:aws:s3:::%s", jobBucket)
 
 	// add permision to allow S3 to invoke the coordinator function
 	// on object creation
@@ -65,8 +67,9 @@ func (d *Driver) CreateCoordinatorNotification(ctx context.Context) error {
 	// add notification configuration so that S3 can invoke the coordinator
 	// once an object in signals/coordinator/ has been created. A blank
 	// object in this file means that the last mapper has completed execution
+
 	notificationConfigInput := &s3.PutBucketNotificationConfigurationInput{
-		Bucket: &d.jobBucket,
+		Bucket: &jobBucket,
 		NotificationConfiguration: &s3Types.NotificationConfiguration{
 			LambdaFunctionConfigurations: []s3Types.LambdaFunctionConfiguration{
 				{

@@ -27,8 +27,7 @@ type DriverInterface interface {
 
 // Driver is a struct that implements the Driver interface
 type Driver struct {
-	jobID     uuid.UUID
-	jobBucket string // TODO: remove and use job id as name for bucket
+	jobID uuid.UUID
 	// clients
 	ObjectStoreAPI objectstore.ObjectStoreAPI
 	FaasAPI        faas.FaasAPI
@@ -44,8 +43,7 @@ func NewDriver(jobID uuid.UUID, configFilePath string) (*Driver, error) {
 
 	// init driver with job id
 	driver := &Driver{
-		jobID:     jobID,
-		jobBucket: fmt.Sprintf("%s-%s", "displ", jobID.String()),
+		jobID: jobID,
 	}
 
 	// set config values to driver

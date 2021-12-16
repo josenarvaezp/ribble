@@ -252,7 +252,7 @@ func (m *Mapper) sendBatch(ctx context.Context, partitionQueue string, batchID i
 	return nil
 }
 
-func (m *Mapper) WriteBatchMetadata(ctx context.Context, bucket, key string, batchMetadata map[string]int64) error {
+func (m *Mapper) WriteBatchMetadata(ctx context.Context, batchMetadata map[string]int64) error {
 	// encode map to JSON
 	p, err := json.Marshal(batchMetadata)
 	if err != nil {
@@ -261,6 +261,8 @@ func (m *Mapper) WriteBatchMetadata(ctx context.Context, bucket, key string, bat
 
 	// use uploader manager to write file to S3
 	jsonContentType := "application/json"
+	bucket := m.JobID.String()
+	key := fmt.Sprintf("metadata/%s", m.MapID.String())
 	input := &s3.PutObjectInput{
 		Bucket:        &bucket,
 		Key:           &key,
