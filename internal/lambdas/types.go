@@ -1,4 +1,4 @@
-package mapper
+package lambdas
 
 // MapInt represent a map[string]int data type input
 type MapInt struct {

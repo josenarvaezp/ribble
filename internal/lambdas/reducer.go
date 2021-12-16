@@ -1,4 +1,4 @@
-package reducer
+package lambdas
 
 import (
 	"bytes"

@@ -1,6 +1,4 @@
-package reducer
-
-import "github.com/josenarvaezp/displ/internal/mapper"
+package lambdas
 
 // DedupeMap is a map holding the values of the already processed
 // messages. The key to the first map represents the mappers' IDs.
@@ -37,7 +35,7 @@ type DedupeProcessedMessages struct {
 // IsBatchComplete checks if the reducer has processed
 // the maximum amount of message a batch can have
 func (dp *DedupeProcessedMessages) IsBatchComplete() bool {
-	if dp.ProcessedCount == mapper.MaxItemsPerBatch {
+	if dp.ProcessedCount == MaxItemsPerBatch {
 		return true
 	}
 	return false

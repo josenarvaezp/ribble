@@ -13,14 +13,14 @@ import (
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/driver"
-	"github.com/josenarvaezp/displ/internal/mapper"
+	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
 // TODO: create different logic when full object is provided
 // this is needed to allow objects to be downloaded concurrently
 // if we use ranges, automatically concurrency does not work
 
-var m *mapper.Mapper
+var m *lambdas.Mapper
 
 type MapperInput struct {
 	JobID   uuid.UUID      `json:"jobID"`
@@ -29,7 +29,7 @@ type MapperInput struct {
 
 func init() {
 	var err error
-	m, err = mapper.NewMapper(true)
+	m, err = lambdas.NewMapper(true)
 	if err != nil {
 		fmt.Println(err)
 		return

@@ -11,8 +11,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/google/uuid"
-	"github.com/josenarvaezp/displ/internal/mapper"
-	"github.com/josenarvaezp/displ/internal/reducer"
+	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
 type ReducerInput struct {
@@ -20,11 +19,11 @@ type ReducerInput struct {
 	QueuePartition int       `json:"queuePartition"`
 }
 
-var r *reducer.Reducer
+var r *lambdas.Reducer
 
 func init() {
 	var err error
-	r, err = reducer.NewReducer(true)
+	r, err = lambdas.NewReducer(true)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -42,14 +41,14 @@ func HandleRequest(ctx context.Context, request ReducerInput) (string, error) {
 	r.JobID = request.JobID
 
 	queueName := fmt.Sprintf("%s-%d", r.JobID.String(), request.QueuePartition)
-	queueURL := mapper.GetQueueURL(queueName, r.Region, r.AccountID, r.Local)
+	queueURL := lambdas.GetQueueURL(queueName, r.Region, r.AccountID, r.Local)
 
 	// batch metadata - number of batches the reducer needs to process
 	totalBatchesToProcess := r.GetNumberOfBatchesToProcess(queueName)
 	totalProcessedBatches := 0
 
 	// map to hold data of all processed messages
-	dedupeMap := reducer.InitDedupeMap()
+	dedupeMap := lambdas.InitDedupeMap()
 
 	// init output map - holds reduced values
 	outputMap := make(map[string]int)
@@ -57,11 +56,11 @@ func HandleRequest(ctx context.Context, request ReducerInput) (string, error) {
 	// use same parameters for all get messages requests
 	recieveMessageParams := &sqs.ReceiveMessageInput{
 		QueueUrl:            &queueURL,
-		MaxNumberOfMessages: mapper.MaxItemsPerBatch,
+		MaxNumberOfMessages: lambdas.MaxItemsPerBatch,
 		MessageAttributeNames: []string{
-			mapper.MapIDAttribute,
-			mapper.BatchIDAttribute,
-			mapper.MessageIDAttribute,
+			lambdas.MapIDAttribute,
+			lambdas.BatchIDAttribute,
+			lambdas.MessageIDAttribute,
 		},
 	}
 
@@ -75,7 +74,7 @@ func HandleRequest(ctx context.Context, request ReducerInput) (string, error) {
 
 		for _, message := range output.Messages {
 			// unmarshall message body
-			var res mapper.MapInt
+			var res lambdas.MapInt
 			body := []byte(*message.Body)
 			err = json.Unmarshal(body, &res)
 			if err != nil {
@@ -84,13 +83,13 @@ func HandleRequest(ctx context.Context, request ReducerInput) (string, error) {
 			}
 
 			// get message attributes
-			currentMapID := message.MessageAttributes[mapper.MapIDAttribute].StringValue
-			currentBatchID, err := strconv.Atoi(*message.MessageAttributes[mapper.BatchIDAttribute].StringValue)
+			currentMapID := message.MessageAttributes[lambdas.MapIDAttribute].StringValue
+			currentBatchID, err := strconv.Atoi(*message.MessageAttributes[lambdas.BatchIDAttribute].StringValue)
 			if err != nil {
 				fmt.Println(err)
 				return "", err
 			}
-			currentMessageID, err := strconv.Atoi(*message.MessageAttributes[mapper.MessageIDAttribute].StringValue)
+			currentMessageID, err := strconv.Atoi(*message.MessageAttributes[lambdas.MessageIDAttribute].StringValue)
 			if err != nil {
 				fmt.Println(err)
 				return "", err

@@ -1,4 +1,4 @@
-package mapper
+package lambdas
 
 import (
 	"bytes"
@@ -290,28 +290,6 @@ func (m *Mapper) getQueuePartition(key string) int {
 	partitionQueue := int(bi.Uint64() % uint64(m.NumQueues))
 
 	return partitionQueue
-}
-
-// TODO: move to utils
-// getQueueURL returns the queue URL based on its name
-func GetQueueURL(queueName string, region string, accountID string, local bool) string {
-	var queueURL string
-
-	if local {
-		queueURL = fmt.Sprintf(
-			"https://localstack:4566/000000000000/%s",
-			queueName,
-		)
-	} else {
-		queueURL = fmt.Sprintf(
-			"https://sqs.%s.amazonaws.com/%s/%s",
-			region,
-			accountID,
-			queueName,
-		)
-	}
-
-	return queueURL
 }
 
 func (m *Mapper) WriteBlankFile() {
