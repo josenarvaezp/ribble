@@ -2,7 +2,12 @@ package mapper
 
 const (
 	// items per batch
-	MAX_ITEMS_BATCH = 10
+	MaxItemsPerBatch = 10
+
+	// attributes for sending and receiving messages
+	MapIDAttribute     = "map-id"
+	BatchIDAttribute   = "batch-id"
+	MessageIDAttribute = "message-id"
 )
 
 var (

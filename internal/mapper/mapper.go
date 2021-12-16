@@ -27,8 +27,8 @@ import (
 // MapperAPI is an interface deining the functions available to the mapper
 type MapperAPI interface {
 	DownloadFile(object objectstore.ObjectRange) (*string, error)
-	EmitMap(ctx context.Context, outputMap map[string]int, batchMetadata map[string]int64) error
-	WriteBatchMetadata(ctx context.Context, bucket, key string, batchMetadata map[string]int64) error
+	EmitMap(ctx context.Context, outputMap map[string]int, batchMetadata map[int]int64) error
+	WriteBatchMetadata(ctx context.Context, bucket, key string, batchMetadata map[int]int64) error
 }
 
 // Mapper is an interface that implements MapperAPI
@@ -124,10 +124,10 @@ func (m *Mapper) DownloadFile(object objectstore.ObjectRange) (*string, error) {
 func (m *Mapper) EmitMap(
 	ctx context.Context,
 	outputMap map[string]int,
-	batchMetadata map[string]int64,
+	batchMetadata map[int]int64,
 ) error {
 	// keep dictionary of batches to allow sending keys in batches
-	batches := make(map[string][]MapInt)
+	batches := make(map[int][]MapInt)
 
 	// iterate through the output map and send values in batches
 	for key, value := range outputMap {
@@ -144,7 +144,7 @@ func (m *Mapper) EmitMap(
 		)
 
 		// flush batch if it has maximum items
-		if len(batches[partitionQueue]) == MAX_ITEMS_BATCH {
+		if len(batches[partitionQueue]) == MaxItemsPerBatch {
 			// send batch to queue
 			if err := m.sendBatch(
 				ctx,
@@ -171,7 +171,7 @@ func (m *Mapper) EmitMap(
 		// be much simpler given that a reducer will only need to know the number of
 		// batches that the mapper sent rather that the number of batches and for
 		// each batch how many items
-		valuesToAppend := make([]MapInt, MAX_ITEMS_BATCH-len(valuesInBatch))
+		valuesToAppend := make([]MapInt, MaxItemsPerBatch-len(valuesInBatch))
 		for i := 0; i < len(valuesToAppend); i++ {
 			valuesToAppend[i] = MapInt{
 				EmptyVal: true,
@@ -199,7 +199,7 @@ func (m *Mapper) EmitMap(
 }
 
 // sendBatch sends the specified batch to the specified queue
-func (m *Mapper) sendBatch(ctx context.Context, partitionQueue string, batchID int, batch []MapInt) error {
+func (m *Mapper) sendBatch(ctx context.Context, partitionQueue int, batchID int, batch []MapInt) error {
 	// convert batch to message entries
 	messsageEntries := make([]types.SendMessageBatchRequestEntry, len(batch))
 	for i, message := range batch {
@@ -218,15 +218,15 @@ func (m *Mapper) sendBatch(ctx context.Context, partitionQueue string, batchID i
 			Id:          &messageID,
 			MessageBody: &messageJSONString,
 			MessageAttributes: map[string]types.MessageAttributeValue{
-				"map-id": {
+				MapIDAttribute: {
 					DataType:    &stringDataType,
 					StringValue: &mapID,
 				},
-				"batch-id": {
+				BatchIDAttribute: {
 					DataType:    &numberDataType,
 					StringValue: &batchID,
 				},
-				"message-id": {
+				MessageIDAttribute: {
 					DataType:    &numberDataType,
 					StringValue: &messageID,
 				},
@@ -234,7 +234,8 @@ func (m *Mapper) sendBatch(ctx context.Context, partitionQueue string, batchID i
 		}
 	}
 
-	queueURL := m.getQueueURL(partitionQueue)
+	queueName := fmt.Sprintf("%s-%d", m.JobID.String(), partitionQueue)
+	queueURL := GetQueueURL(queueName, m.Region, m.AccountID, m.local)
 	params := &sqs.SendMessageBatchInput{
 		Entries:  messsageEntries,
 		QueueUrl: &queueURL,
@@ -252,7 +253,7 @@ func (m *Mapper) sendBatch(ctx context.Context, partitionQueue string, batchID i
 	return nil
 }
 
-func (m *Mapper) WriteBatchMetadata(ctx context.Context, batchMetadata map[string]int64) error {
+func (m *Mapper) WriteBatchMetadata(ctx context.Context, batchMetadata map[int]int64) error {
 	// encode map to JSON
 	p, err := json.Marshal(batchMetadata)
 	if err != nil {
@@ -280,7 +281,7 @@ func (m *Mapper) WriteBatchMetadata(ctx context.Context, batchMetadata map[strin
 
 // getQueuePartition is a helpder function for the mapper that
 // gets the queue partition of a key given its md5 hash
-func (m *Mapper) getQueuePartition(key string) string {
+func (m *Mapper) getQueuePartition(key string) int {
 	bi := big.NewInt(0)
 	h := md5.New()
 	h.Write([]byte(key))
@@ -288,24 +289,24 @@ func (m *Mapper) getQueuePartition(key string) string {
 	bi.SetString(hexstr, 16)
 	partitionQueue := int(bi.Uint64() % uint64(m.NumQueues))
 
-	return strconv.Itoa(partitionQueue)
+	return partitionQueue
 }
 
+// TODO: move to utils
 // getQueueURL returns the queue URL based on its name
-func (m *Mapper) getQueueURL(queueName string) string {
+func GetQueueURL(queueName string, region string, accountID string, local bool) string {
 	var queueURL string
 
-	if m.local {
+	if local {
 		queueURL = fmt.Sprintf(
-			"https://localstack:4566/000000000000/%s-%s",
-			m.JobID.String(),
+			"https://localstack:4566/000000000000/%s",
 			queueName,
 		)
 	} else {
 		queueURL = fmt.Sprintf(
 			"https://sqs.%s.amazonaws.com/%s/%s",
-			m.Region,
-			m.AccountID,
+			region,
+			accountID,
 			queueName,
 		)
 	}

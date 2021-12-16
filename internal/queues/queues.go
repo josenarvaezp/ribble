@@ -23,4 +23,14 @@ type QueuesAPI interface {
 		params *sqs.SendMessageBatchInput,
 		optFns ...func(*sqs.Options),
 	) (*sqs.SendMessageBatchOutput, error)
+	GetQueueUrl(
+		ctx context.Context,
+		params *sqs.GetQueueUrlInput,
+		optFns ...func(*sqs.Options),
+	) (*sqs.GetQueueUrlOutput, error)
+	ReceiveMessage(
+		ctx context.Context,
+		params *sqs.ReceiveMessageInput,
+		optFns ...func(*sqs.Options),
+	) (*sqs.ReceiveMessageOutput, error)
 }

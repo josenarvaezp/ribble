@@ -48,7 +48,7 @@ func HandleRequest(ctx context.Context, request MapperInput) (string, error) {
 	m.NumQueues = request.Mapping.NumQueues
 
 	// keep a dictionary with the number of batches per queue
-	batchMetadata := make(map[string]int64)
+	batchMetadata := make(map[int]int64)
 
 	for _, object := range request.Mapping.Objects {
 		// download file
