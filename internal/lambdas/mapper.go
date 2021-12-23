@@ -1,7 +1,6 @@
 package lambdas
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
@@ -256,32 +255,6 @@ func (m *Mapper) sendBatch(ctx context.Context, partitionQueue int, batchID int,
 	if len(output.Failed) != 0 {
 		// TODO: retry
 		fmt.Println("some messages were not sent")
-	}
-
-	return nil
-}
-
-func (m *Mapper) WriteBatchMetadata(ctx context.Context, batchMetadata map[int]int64) error {
-	// encode map to JSON
-	p, err := json.Marshal(batchMetadata)
-	if err != nil {
-		return err
-	}
-
-	// use uploader manager to write file to S3
-	jsonContentType := "application/json"
-	bucket := m.JobID.String()
-	key := fmt.Sprintf("metadata/%s", m.MapID.String())
-	input := &s3.PutObjectInput{
-		Bucket:        &bucket,
-		Key:           &key,
-		Body:          bytes.NewReader(p),
-		ContentType:   &jsonContentType,
-		ContentLength: int64(len(p)),
-	}
-	_, err = m.UploaderAPI.Upload(ctx, input)
-	if err != nil {
-		return err
 	}
 
 	return nil
