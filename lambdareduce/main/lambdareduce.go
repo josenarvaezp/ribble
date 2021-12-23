@@ -14,11 +14,6 @@ import (
 	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
-type ReducerInput struct {
-	JobID          uuid.UUID `json:"jobID"`
-	QueuePartition int       `json:"queuePartition"`
-}
-
 var r *lambdas.Reducer
 
 func init() {
@@ -30,7 +25,7 @@ func init() {
 	}
 }
 
-func HandleRequest(ctx context.Context, request ReducerInput) (string, error) {
+func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, error) {
 	// get data from context
 	lc, ok := lambdacontext.FromContext(ctx)
 	if !ok {
@@ -39,12 +34,14 @@ func HandleRequest(ctx context.Context, request ReducerInput) (string, error) {
 	r.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
 	r.ReducerID = uuid.New()
 	r.JobID = request.JobID
+	r.NumMappers = request.NumMappers
+	r.QueuePartition = request.QueuePartition
 
 	queueName := fmt.Sprintf("%s-%d", r.JobID.String(), request.QueuePartition)
 	queueURL := lambdas.GetQueueURL(queueName, r.Region, r.AccountID, r.Local)
 
 	// batch metadata - number of batches the reducer needs to process
-	totalBatchesToProcess := r.GetNumberOfBatchesToProcess(queueName)
+	totalBatchesToProcess, err := r.GetNumberOfBatchesToProcess(ctx)
 	totalProcessedBatches := 0
 
 	// map to hold data of all processed messages
@@ -135,12 +132,12 @@ func HandleRequest(ctx context.Context, request ReducerInput) (string, error) {
 		}
 
 		// check if we are done processing values
-		if totalProcessedBatches == totalBatchesToProcess {
+		if totalProcessedBatches == *totalBatchesToProcess {
 			break
 		}
 	}
 
-	err := r.WriteReducerOutput(ctx, outputMap)
+	err = r.WriteReducerOutput(ctx, outputMap)
 	if err != nil {
 		fmt.Println(err)
 		return "", err
@@ -151,7 +148,7 @@ func HandleRequest(ctx context.Context, request ReducerInput) (string, error) {
 
 func main() {
 	ctx := context.Background()
-	request := ReducerInput{
+	request := lambdas.ReducerInput{
 		JobID:          uuid.MustParse("1469d3b8-d133-4036-8944-01ff6518ec25"),
 		QueuePartition: 4,
 	}

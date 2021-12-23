@@ -137,7 +137,20 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 		return err
 	}
 
+	// Crate a queue used by mappers to indicate they have completed processing
+	mappersDoneName := fmt.Sprintf("%s-mappers-done", d.jobID.String())
+	mappersDoneParams := &sqs.CreateQueueInput{
+		QueueName: &mappersDoneName,
+	}
+
+	_, err = d.QueuesAPI.CreateQueue(ctx, mappersDoneParams)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
 	for i := 0; i < numQueues; i++ {
+		// create queues where data from mappers will be sent to
 		// name of the queues takes the job id as prefix
 		currentQueueName := fmt.Sprintf("%s-%d", d.jobID.String(), i)
 		params := &sqs.CreateQueueInput{
@@ -148,6 +161,17 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 			},
 		}
 		_, err := d.QueuesAPI.CreateQueue(ctx, params)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+
+		// create a metadata queue for each queue
+		currentMetadataQueueName := fmt.Sprintf("%s-%d-meta", d.jobID.String(), i)
+		metaParams := &sqs.CreateQueueInput{
+			QueueName: &currentMetadataQueueName,
+		}
+		_, err = d.QueuesAPI.CreateQueue(ctx, metaParams)
 		if err != nil {
 			fmt.Println(err)
 			return err

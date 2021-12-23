@@ -19,6 +19,13 @@ import (
 	"github.com/josenarvaezp/displ/internal/queues"
 )
 
+// ReducerInput is the input the reducer lambda receives
+type ReducerInput struct {
+	JobID          uuid.UUID `json:"jobID"`
+	QueuePartition int       `json:"queuePartition"`
+	NumMappers     int       `json:"numMappers"`
+}
+
 // Reducer is an interface that implements ReducerAPI
 type Reducer struct {
 	JobID     uuid.UUID
@@ -28,9 +35,11 @@ type Reducer struct {
 	UploaderAPI   objectstore.ManagerUploaderAPI
 	QueuesAPI     queues.QueuesAPI
 	// metadata
-	Region    string
-	AccountID string
-	Local     bool
+	Region         string
+	AccountID      string
+	NumMappers     int
+	QueuePartition int
+	Local          bool
 }
 
 // NewReducer initializes a new reducer with its required clients
@@ -104,11 +113,6 @@ func (r *Reducer) WriteReducerOutput(ctx context.Context, outputMap map[string]i
 	return nil
 }
 
-func (r *Reducer) GetNumberOfBatchesToProcess(queueName string) int {
-	// TODO: read metadata for queue, either from s3, sqs or Dynamo
-	return 2
-}
-
 func getQueueMetadataFromS3(ctx context.Context, bucket string, Key string, s3Client *s3.Client) (map[string]int64, error) {
 	contentType := "application/json"
 	params := &s3.GetObjectInput{
@@ -146,4 +150,53 @@ func getQueueMetadataFromQueue(ctx context.Context, queueURL string, sqsClient *
 	}
 	sqsClient.ReceiveMessage(ctx, params)
 	return nil, nil
+}
+
+// GetNumberOfBatchesToProcess gets the number of batches a the reducer needs to process
+// based on the metadata available in the metadata queue for that reducer
+func (r *Reducer) GetNumberOfBatchesToProcess(ctx context.Context) (*int, error) {
+	// holds number of messages to process
+	totalNumOfMessagesToProcess := 0
+
+	// receive message params
+	queueName := fmt.Sprintf("%s-%d-meta", r.JobID.String(), r.QueuePartition)
+	queueURL := GetQueueURL(queueName, r.Region, r.AccountID, r.Local)
+	params := &sqs.ReceiveMessageInput{
+		QueueUrl:            &queueURL,
+		MaxNumberOfMessages: MaxItemsPerBatch,
+	}
+
+	// dedupeMap is used to check if we have processed a message already
+	dedupeMap := make(map[string]bool)
+	mappersProccessedCount := 0
+
+	// get metadata until we have metadata from each mapper
+	for mappersProccessedCount != r.NumMappers {
+		// haven't recived all metadata from all mappers
+		output, err := r.QueuesAPI.ReceiveMessage(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, message := range output.Messages {
+
+			// unmarshal metadata message
+			var res QueueMetadata
+			body := []byte(*message.Body)
+			err = json.Unmarshal(body, &res)
+			if err != nil {
+				return nil, err
+			}
+
+			// add to totalNumOfMessagesToProcess if we have not
+			// processed the current message already
+			if _, ok := dedupeMap[res.MapID]; !ok {
+				dedupeMap[res.MapID] = true
+				totalNumOfMessagesToProcess = totalNumOfMessagesToProcess + res.NumBatches
+				mappersProccessedCount++
+			}
+		}
+	}
+
+	return &totalNumOfMessagesToProcess, nil
 }

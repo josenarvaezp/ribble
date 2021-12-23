@@ -33,4 +33,9 @@ type QueuesAPI interface {
 		params *sqs.ReceiveMessageInput,
 		optFns ...func(*sqs.Options),
 	) (*sqs.ReceiveMessageOutput, error)
+	SendMessage(
+		ctx context.Context,
+		params *sqs.SendMessageInput,
+		optFns ...func(*sqs.Options),
+	) (*sqs.SendMessageOutput, error)
 }

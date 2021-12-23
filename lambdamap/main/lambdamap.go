@@ -11,8 +11,6 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
-	"github.com/google/uuid"
-	"github.com/josenarvaezp/displ/internal/driver"
 	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
@@ -21,11 +19,6 @@ import (
 // if we use ranges, automatically concurrency does not work
 
 var m *lambdas.Mapper
-
-type MapperInput struct {
-	JobID   uuid.UUID      `json:"jobID"`
-	Mapping driver.Mapping `json:"mapping"`
-}
 
 func init() {
 	var err error
@@ -36,7 +29,7 @@ func init() {
 	}
 }
 
-func HandleRequest(ctx context.Context, request MapperInput) (string, error) {
+func HandleRequest(ctx context.Context, request lambdas.MapperInput) (string, error) {
 	// get data from context
 	lc, ok := lambdacontext.FromContext(ctx)
 	if !ok {
@@ -76,13 +69,15 @@ func HandleRequest(ctx context.Context, request MapperInput) (string, error) {
 		}
 	}
 
-	// send batch metadata to S3
-	if err := m.WriteBatchMetadata(ctx, batchMetadata); err != nil {
+	// send batch metadata to sqs
+	if err := m.SendBatchMetadata(ctx, batchMetadata); err != nil {
 		return "", err
 	}
 
-	// check if this mapper is the last one and write blank file
-	m.WriteBlankFile()
+	// send event to queue indicating this mapper has completed
+	if err := m.SendFinishedEvent(ctx); err != nil {
+		return "", err
+	}
 
 	return "", nil
 }

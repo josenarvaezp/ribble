@@ -20,15 +20,23 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/config"
+	"github.com/josenarvaezp/displ/internal/driver"
 	"github.com/josenarvaezp/displ/internal/objectstore"
 	"github.com/josenarvaezp/displ/internal/queues"
 )
+
+// MapperInput is the input the mapper lambda receives
+type MapperInput struct {
+	JobID   uuid.UUID      `json:"jobID"`
+	Mapping driver.Mapping `json:"mapping"`
+}
 
 // MapperAPI is an interface deining the functions available to the mapper
 type MapperAPI interface {
 	DownloadFile(object objectstore.ObjectRange) (*string, error)
 	EmitMap(ctx context.Context, outputMap map[string]int, batchMetadata map[int]int64) error
 	WriteBatchMetadata(ctx context.Context, bucket, key string, batchMetadata map[int]int64) error
+	SendFinishedEvent(ctx context.Context) error
 }
 
 // Mapper is an interface that implements MapperAPI
@@ -292,15 +300,71 @@ func (m *Mapper) getQueuePartition(key string) int {
 	return partitionQueue
 }
 
-func (m *Mapper) WriteBlankFile() {
-	// TODO: list is an expensive operation so maybe there is a nother solution
-	// using Dynamo
-	// list files in /metadata
+// SendFinishedEvent sends an event to the mappers-done queue to indicate
+// that the current mappers has finished processing
+func (m *Mapper) SendFinishedEvent(ctx context.Context) error {
+	queueName := fmt.Sprintf("%s-%s", m.JobID.String(), "mappers-done")
+	queueURL := GetQueueURL(queueName, m.Region, m.AccountID, m.local)
+	curentMapID := m.MapID.String()
+	params := &sqs.SendMessageInput{
+		MessageBody: &curentMapID,
+		QueueUrl:    &queueURL,
+	}
+	_, err := m.QueuesAPI.SendMessage(ctx, params)
+	if err != nil {
+		return err
+	}
 
-	// if files == numMappers then this is the last mapper
+	return nil
+}
 
-	// list files in signals/coordinator/ to check if another mapper
-	// at the same time has written this blank file
+// QueueMetadata is used to send events to the metadata queues
+// about how many batches a map processed
+type QueueMetadata struct {
+	MapID      string `json:"jobID"`
+	NumBatches int    `json:"numBatches"`
+}
 
-	// if no files then write new file
+// SendBatchMetadata sends the number of batches the current mapper sent to each of the queues
+// this is used so that the reducers know how many events they should process before
+// writing out the output
+func (m *Mapper) SendBatchMetadata(ctx context.Context, batchMetadata map[int]int64) error {
+	meta := &QueueMetadata{
+		MapID: m.MapID.String(),
+	}
+
+	// loop through the queues
+	for i := 0; i < int(m.NumQueues); i++ {
+		// send params
+		queueName := fmt.Sprintf("%s-%d-meta", m.JobID.String(), i)
+		queueURL := GetQueueURL(queueName, m.Region, m.AccountID, m.local)
+		params := &sqs.SendMessageInput{
+			QueueUrl: &queueURL,
+		}
+
+		// add number of batches
+		if numOfBatches, ok := batchMetadata[i]; ok {
+			meta.NumBatches = int(numOfBatches)
+		} else {
+			// no message was sent from this mapper to the current queue
+			meta.NumBatches = 0
+		}
+
+		// encode metadata into JSON
+		p, err := json.Marshal(meta)
+		if err != nil {
+			return err
+		}
+		metaJSONString := string(p)
+
+		// add metadata to body
+		params.MessageBody = &metaJSONString
+
+		_, err = m.QueuesAPI.SendMessage(ctx, params)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
