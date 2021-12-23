@@ -67,7 +67,7 @@ func NewCoordinator(
 
 	// create config
 	if local {
-		cfg, err = config.InitLocalLambdaCfg()
+		cfg, err = config.InitLocalCfg()
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +102,7 @@ func (c *Coordinator) AreMappersDone(ctx context.Context) error {
 	doneMappersCount := 0
 
 	// loop until all mappers are done
-	for doneMappersCount != int(c.NumMappers) {
+	for doneMappersCount < int(c.NumMappers) {
 		// mappers are not done yet
 		output, err := c.QueuesAPI.ReceiveMessage(ctx, params)
 		if err != nil {

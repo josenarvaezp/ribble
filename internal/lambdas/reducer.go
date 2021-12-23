@@ -58,7 +58,7 @@ func NewReducer(
 
 	// create config
 	if local {
-		cfg, err = config.InitLocalLambdaCfg()
+		cfg, err = config.InitLocalCfg()
 		if err != nil {
 			return nil, err
 		}
