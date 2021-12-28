@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	sqsTypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/lambdas"
 )
@@ -44,11 +47,20 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 	totalBatchesToProcess, err := r.GetNumberOfBatchesToProcess(ctx)
 	totalProcessedBatches := 0
 
-	// map to hold data of all processed messages
-	dedupeMap := lambdas.InitDedupeMap()
+	// checkpoint info
+	processedMessagesWithoutCheckpoint := 0
+	currentCheckpoint := 1
 
-	// init output map - holds reduced values
-	outputMap := make(map[string]int)
+	// map to hold data of all processed messages
+	dedupe := lambdas.InitDedupe()
+
+	// holds the intermediate results
+	intermediateMap := make(map[string]int)
+
+	// processedMessagesDeleteInfo holds the data to delete messages from queue
+	processedMessagesDeleteInfo := make([]sqsTypes.DeleteMessageBatchRequestEntry, lambdas.MaxMessagesWithoutCheckpoint)
+
+	var wg sync.WaitGroup
 
 	// use same parameters for all get messages requests
 	recieveMessageParams := &sqs.ReceiveMessageInput{
@@ -63,6 +75,46 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 
 	// recieve messages until we are done processing all queue
 	for true {
+		if processedMessagesWithoutCheckpoint == lambdas.MaxMessagesBeforeCheckpointComplete && currentCheckpoint != 1 {
+			// check that the last checkpoint has completed before processing any more messages
+			// we give a buffer of 15,000 new messages for saving the checkpoint which happens
+			// in the background. If this point is reached it means we have processed 115,000 messages
+			// without deleting from the queue which is close to the aws limit for queues
+			wg.Wait()
+		}
+
+		if processedMessagesWithoutCheckpoint == lambdas.MaxMessagesWithoutCheckpoint {
+			// We need to delete the messages read from the sqs queue and we create a checkpoint
+			// in S3 as the fault tolerant mechanism. Saving the checkpoint can be done concurrently
+			// in the background while we keep processing messages
+
+			// merge the dedupe map so that the read dedupe map is up to date
+			dedupe.Merge()
+
+			// save intermediate dedupe
+			wg.Add(1)
+			go r.SaveIntermediateDedupe(ctx, dedupe.WriteMap, currentCheckpoint, &wg)
+
+			// save intermediate map
+			wg.Add(1)
+			go r.SaveIntermediateOutput(ctx, intermediateMap, currentCheckpoint, &wg)
+
+			// update output map with reduced intermediate results
+			wg.Add(1)
+			go r.UpdateOutputMap(intermediateMap, &wg)
+
+			// delete all messages from queue
+			wg.Add(1)
+			go r.DeleteIntermediateMessagesFromQueue(ctx, queueURL, processedMessagesDeleteInfo, &wg)
+
+			// update checkpoint info
+			currentCheckpoint++
+			processedMessagesWithoutCheckpoint = 0
+			processedMessagesDeleteInfo = make([]sqsTypes.DeleteMessageBatchRequestEntry, lambdas.MaxMessagesWithoutCheckpoint)
+			intermediateMap = make(map[string]int)
+			dedupe.WriteMap = lambdas.InitDedupeMap()
+		}
+
 		output, err := r.QueuesAPI.ReceiveMessage(ctx, recieveMessageParams)
 		if err != nil {
 			fmt.Println(err)
@@ -70,6 +122,14 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 		}
 
 		for _, message := range output.Messages {
+			processedMessagesWithoutCheckpoint++
+
+			// add delete info
+			processedMessagesDeleteInfo[processedMessagesWithoutCheckpoint] = sqsTypes.DeleteMessageBatchRequestEntry{
+				Id:            message.MessageId,
+				ReceiptHandle: message.ReceiptHandle,
+			}
+
 			// unmarshall message body
 			var res lambdas.MapInt
 			body := []byte(*message.Body)
@@ -93,31 +153,30 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 			}
 
 			// check if message has already been processed
-			dedupeMessages, ok := dedupeMap.GetProcessedMessages(*currentMapID, currentBatchID)
-			if ok {
-				if dedupeMessages.IsBatchComplete() {
+			if exists := dedupe.BatchExists(*currentMapID, currentBatchID); exists {
+				if dedupe.IsBatchComplete(*currentMapID, currentBatchID) {
 					// ignore as it is a duplicated message
 					continue
 				}
 
-				if dedupeMessages.IsMessageProcessed(currentMessageID) {
+				if dedupe.IsMessageProcessed(*currentMapID, currentBatchID, currentMessageID) {
 					// ignore as it is a duplicated message
 					continue
 				}
 
 				// message has not been processed
 				// add processed message to dedupe map
-				dedupeMessages.UpdateMessageProcessed(currentMessageID)
+				dedupe.UpdateMessageProcessed(*currentMapID, currentBatchID, currentMessageID)
 
 				// check if we are done processing batch from map
-				if dedupeMessages.IsBatchComplete() {
+				if dedupe.IsBatchComplete(*currentMapID, currentBatchID) {
 					totalProcessedBatches++
-					// delete processed map
-					dedupeMessages.DeletedProcessedMessages()
+					// delete processed map from dedupe
+					dedupe.DeletedProcessedMessages(*currentMapID, currentBatchID)
 				}
 			} else {
 				// no messages for batch have been processed - init dedupe data for batch
-				dedupeMap.InitDedupeBatch(*currentMapID, currentBatchID, currentMessageID)
+				dedupe.InitDedupeBatch(*currentMapID, currentBatchID, currentMessageID)
 			}
 
 			// process message
@@ -125,9 +184,9 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 			currentValue := res.Value
 
 			// only process value if it is not empty
-			// emty values are sent to keep the same number of events per batch
+			// empty values are sent to keep the same number of events per batch
 			if res.EmptyVal != true {
-				outputMap[currentKey] = outputMap[currentKey] + currentValue
+				intermediateMap[currentKey] = intermediateMap[currentKey] + currentValue
 			}
 		}
 
@@ -137,7 +196,30 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 		}
 	}
 
-	err = r.WriteReducerOutput(ctx, outputMap)
+	// wait in case reducers is saving checkpoint in the background
+	wg.Wait()
+
+	// save intermediate dedupe
+	wg.Add(1)
+	go r.SaveIntermediateDedupe(ctx, dedupe.WriteMap, currentCheckpoint, &wg)
+
+	// save intermediate map
+	wg.Add(1)
+	go r.SaveIntermediateOutput(ctx, intermediateMap, currentCheckpoint, &wg)
+
+	// update output map with reduced intermediate results
+	wg.Add(1)
+	go r.UpdateOutputMap(intermediateMap, &wg)
+
+	// delete all messages from queue
+	wg.Add(1)
+	go r.DeleteIntermediateMessagesFromQueue(ctx, queueURL, processedMessagesDeleteInfo, &wg)
+
+	wg.Wait()
+
+	// write reducer output
+	key := fmt.Sprintf("output/%s", r.ReducerID.String())
+	r.WriteReducerOutput(ctx, r.OutputMap, key)
 	if err != nil {
 		fmt.Println(err)
 		return "", err
@@ -147,11 +229,5 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 }
 
 func main() {
-	ctx := context.Background()
-	request := lambdas.ReducerInput{
-		JobID:          uuid.MustParse("1469d3b8-d133-4036-8944-01ff6518ec25"),
-		QueuePartition: 4,
-	}
-	HandleRequest(ctx, request)
-	// lambda.Start(HandleRequest)
+	lambda.Start(HandleRequest)
 }

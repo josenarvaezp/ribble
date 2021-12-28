@@ -6,15 +6,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	sqsTypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/config"
 	"github.com/josenarvaezp/displ/internal/objectstore"
 	"github.com/josenarvaezp/displ/internal/queues"
+)
+
+const (
+	// constants used for doing the checkpoint mechanism
+	MaxMessagesWithoutCheckpoint        = 100000
+	MaxMessagesBeforeCheckpointComplete = 15000
 )
 
 // ReducerInput is the input the reducer lambda receives
@@ -38,6 +46,7 @@ type Reducer struct {
 	NumMappers     int
 	QueuePartition int
 	Local          bool
+	OutputMap      map[string]int
 }
 
 // NewReducer initializes a new reducer with its required clients
@@ -52,8 +61,9 @@ func NewReducer(
 
 	// init mapper
 	mapper := &Reducer{
-		Region: region,
-		Local:  local,
+		Region:    region,
+		Local:     local,
+		OutputMap: make(map[string]int),
 	}
 
 	// create config
@@ -85,7 +95,7 @@ func NewReducer(
 }
 
 // WriteReducerOutput writes the output of the reducer to objectstore
-func (r *Reducer) WriteReducerOutput(ctx context.Context, outputMap map[string]int) error {
+func (r *Reducer) WriteReducerOutput(ctx context.Context, outputMap map[string]int, key string) error {
 	// encode map to JSON
 	p, err := json.Marshal(outputMap)
 	if err != nil {
@@ -95,7 +105,6 @@ func (r *Reducer) WriteReducerOutput(ctx context.Context, outputMap map[string]i
 	// use uploader manager to write file to S3
 	jsonContentType := "application/json"
 	bucket := r.JobID.String()
-	key := fmt.Sprintf("output/%s", r.ReducerID.String())
 	input := &s3.PutObjectInput{
 		Bucket:        &bucket,
 		Key:           &key,
@@ -158,4 +167,102 @@ func (r *Reducer) GetNumberOfBatchesToProcess(ctx context.Context) (*int, error)
 	}
 
 	return &totalNumOfMessagesToProcess, nil
+}
+
+// SaveIntermediateOutput saves the intermediate output into an S3 object
+func (r *Reducer) SaveIntermediateOutput(
+	ctx context.Context,
+	intermediateMap map[string]int,
+	currentCheckpoint int,
+	wg *sync.WaitGroup,
+) error {
+	defer wg.Done()
+
+	// save intermediate output map
+	key := fmt.Sprintf("checkpoints/%s/%d-checkpoint", r.ReducerID.String(), currentCheckpoint)
+	if err := r.WriteReducerOutput(ctx, intermediateMap, key); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SaveIntermediateDedupe saves the intermediate dedupe data to an S3 file
+func (r *Reducer) SaveIntermediateDedupe(ctx context.Context, dedupeMap DedupeMap, currentCheckpoint int, wg *sync.WaitGroup) error {
+	defer wg.Done()
+
+	// encode map to JSON
+	p, err := json.Marshal(dedupeMap)
+	if err != nil {
+		return err
+	}
+
+	// use uploader manager to write file to S3
+	jsonContentType := "application/json"
+	bucket := r.JobID.String()
+	key := fmt.Sprintf("checkpoints/%s/%d-dedupe", r.ReducerID.String(), currentCheckpoint)
+	inputParams := &s3.PutObjectInput{
+		Bucket:        &bucket,
+		Key:           &key,
+		Body:          bytes.NewReader(p),
+		ContentType:   &jsonContentType,
+		ContentLength: int64(len(p)),
+	}
+	_, err = r.UploaderAPI.Upload(ctx, inputParams)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// UpdateOutputMap merges the outputMap with the intermediate map
+func (r *Reducer) UpdateOutputMap(intermediateMap map[string]int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	// update output map values
+	for k, v := range intermediateMap {
+		r.OutputMap[k] = r.OutputMap[k] + v
+	}
+}
+
+// DeleteIntermediateMessagesFromQueue deletes the read messages from sqs
+func (r *Reducer) DeleteIntermediateMessagesFromQueue(
+	ctx context.Context,
+	queueURL string,
+	deleteEntries []sqsTypes.DeleteMessageBatchRequestEntry,
+	wg *sync.WaitGroup,
+) error {
+	defer wg.Done()
+
+	params := &sqs.DeleteMessageBatchInput{
+		QueueUrl: &queueURL,
+	}
+
+	firstMessageToDelete := 0
+	lastMessageToDelete := 10
+
+	// we can only delete 10 per call so we need to loop through all delete requests
+	for lastMessageToDelete <= len(deleteEntries) {
+		messagesToDelete := deleteEntries[firstMessageToDelete:lastMessageToDelete]
+		params.Entries = messagesToDelete
+		_, err := r.QueuesAPI.DeleteMessageBatch(ctx, params)
+		if err != nil {
+			return err
+		}
+
+		// TODO check failed results and add error message - we probs don't want to stop execution
+
+		// update messages to delete indexes
+		firstMessageToDelete = lastMessageToDelete
+
+		if len(deleteEntries) < lastMessageToDelete+10 {
+			// we don't have 10 values to delete
+			lastMessageToDelete = lastMessageToDelete + (len(deleteEntries) - lastMessageToDelete)
+		} else {
+			lastMessageToDelete = lastMessageToDelete + 10
+		}
+	}
+
+	return nil
 }

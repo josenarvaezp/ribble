@@ -38,4 +38,9 @@ type QueuesAPI interface {
 		params *sqs.SendMessageInput,
 		optFns ...func(*sqs.Options),
 	) (*sqs.SendMessageOutput, error)
+	DeleteMessageBatch(
+		ctx context.Context,
+		params *sqs.DeleteMessageBatchInput,
+		optFns ...func(*sqs.Options),
+	) (*sqs.DeleteMessageBatchOutput, error)
 }
