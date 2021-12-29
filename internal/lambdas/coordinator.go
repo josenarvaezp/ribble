@@ -132,6 +132,7 @@ func (c *Coordinator) InvokeReducers(ctx context.Context) error {
 		// encode reducer input to json
 		reducerInput := ReducerInput{
 			JobID:          c.JobID,
+			ReducerID:      uuid.New(),
 			QueuePartition: i,
 			NumMappers:     int(c.NumMappers),
 		}

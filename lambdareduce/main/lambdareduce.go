@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	sqsTypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
-	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
@@ -35,10 +34,27 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 		return "", errors.New("Error getting lambda context")
 	}
 	r.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
-	r.ReducerID = uuid.New()
+	r.ReducerID = request.ReducerID
 	r.JobID = request.JobID
 	r.NumMappers = request.NumMappers
 	r.QueuePartition = request.QueuePartition
+
+	var wg sync.WaitGroup
+
+	// check if there is a checkpoint saved for this reducer
+	checkpointData, err := r.GetCheckpointData(ctx)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+
+	// get output map and dedupe info from checkpoints
+	if len(checkpointData.IntermediateOutputData) != 0 {
+		r.GetOutputMap(ctx, checkpointData.IntermediateOutputData, &wg)
+		r.GetDedupe(ctx, checkpointData.DedupeData, &wg)
+
+		wg.Wait()
+	}
 
 	queueName := fmt.Sprintf("%s-%d", r.JobID.String(), request.QueuePartition)
 	queueURL := lambdas.GetQueueURL(queueName, r.Region, r.AccountID, r.Local)
@@ -49,18 +65,13 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 
 	// checkpoint info
 	processedMessagesWithoutCheckpoint := 0
-	currentCheckpoint := 1
-
-	// map to hold data of all processed messages
-	dedupe := lambdas.InitDedupe()
+	checkpointData.LastCheckpoint++
 
 	// holds the intermediate results
 	intermediateMap := make(map[string]int)
 
 	// processedMessagesDeleteInfo holds the data to delete messages from queue
 	processedMessagesDeleteInfo := make([]sqsTypes.DeleteMessageBatchRequestEntry, lambdas.MaxMessagesWithoutCheckpoint)
-
-	var wg sync.WaitGroup
 
 	// use same parameters for all get messages requests
 	recieveMessageParams := &sqs.ReceiveMessageInput{
@@ -75,7 +86,7 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 
 	// recieve messages until we are done processing all queue
 	for true {
-		if processedMessagesWithoutCheckpoint == lambdas.MaxMessagesBeforeCheckpointComplete && currentCheckpoint != 1 {
+		if processedMessagesWithoutCheckpoint == lambdas.MaxMessagesBeforeCheckpointComplete && checkpointData.LastCheckpoint != 1 {
 			// check that the last checkpoint has completed before processing any more messages
 			// we give a buffer of 15,000 new messages for saving the checkpoint which happens
 			// in the background. If this point is reached it means we have processed 115,000 messages
@@ -89,15 +100,15 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 			// in the background while we keep processing messages
 
 			// merge the dedupe map so that the read dedupe map is up to date
-			dedupe.Merge()
+			r.Dedupe.Merge()
 
 			// save intermediate dedupe
 			wg.Add(1)
-			go r.SaveIntermediateDedupe(ctx, dedupe.WriteMap, currentCheckpoint, &wg)
+			go r.SaveIntermediateDedupe(ctx, checkpointData.LastCheckpoint, &wg)
 
 			// save intermediate map
 			wg.Add(1)
-			go r.SaveIntermediateOutput(ctx, intermediateMap, currentCheckpoint, &wg)
+			go r.SaveIntermediateOutput(ctx, intermediateMap, checkpointData.LastCheckpoint, &wg)
 
 			// update output map with reduced intermediate results
 			wg.Add(1)
@@ -108,11 +119,11 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 			go r.DeleteIntermediateMessagesFromQueue(ctx, queueURL, processedMessagesDeleteInfo, &wg)
 
 			// update checkpoint info
-			currentCheckpoint++
+			checkpointData.LastCheckpoint++
 			processedMessagesWithoutCheckpoint = 0
 			processedMessagesDeleteInfo = make([]sqsTypes.DeleteMessageBatchRequestEntry, lambdas.MaxMessagesWithoutCheckpoint)
 			intermediateMap = make(map[string]int)
-			dedupe.WriteMap = lambdas.InitDedupeMap()
+			r.Dedupe.WriteMap = lambdas.InitDedupeMap()
 		}
 
 		output, err := r.QueuesAPI.ReceiveMessage(ctx, recieveMessageParams)
@@ -153,30 +164,30 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 			}
 
 			// check if message has already been processed
-			if exists := dedupe.BatchExists(*currentMapID, currentBatchID); exists {
-				if dedupe.IsBatchComplete(*currentMapID, currentBatchID) {
+			if exists := r.Dedupe.BatchExists(*currentMapID, currentBatchID); exists {
+				if r.Dedupe.IsBatchComplete(*currentMapID, currentBatchID) {
 					// ignore as it is a duplicated message
 					continue
 				}
 
-				if dedupe.IsMessageProcessed(*currentMapID, currentBatchID, currentMessageID) {
+				if r.Dedupe.IsMessageProcessed(*currentMapID, currentBatchID, currentMessageID) {
 					// ignore as it is a duplicated message
 					continue
 				}
 
 				// message has not been processed
 				// add processed message to dedupe map
-				dedupe.UpdateMessageProcessed(*currentMapID, currentBatchID, currentMessageID)
+				r.Dedupe.UpdateMessageProcessed(*currentMapID, currentBatchID, currentMessageID)
 
 				// check if we are done processing batch from map
-				if dedupe.IsBatchComplete(*currentMapID, currentBatchID) {
+				if r.Dedupe.IsBatchComplete(*currentMapID, currentBatchID) {
 					totalProcessedBatches++
 					// delete processed map from dedupe
-					dedupe.DeletedProcessedMessages(*currentMapID, currentBatchID)
+					r.Dedupe.DeletedProcessedMessages(*currentMapID, currentBatchID)
 				}
 			} else {
 				// no messages for batch have been processed - init dedupe data for batch
-				dedupe.InitDedupeBatch(*currentMapID, currentBatchID, currentMessageID)
+				r.Dedupe.InitDedupeBatch(*currentMapID, currentBatchID, currentMessageID)
 			}
 
 			// process message
@@ -201,11 +212,11 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 
 	// save intermediate dedupe
 	wg.Add(1)
-	go r.SaveIntermediateDedupe(ctx, dedupe.WriteMap, currentCheckpoint, &wg)
+	go r.SaveIntermediateDedupe(ctx, checkpointData.LastCheckpoint, &wg)
 
 	// save intermediate map
 	wg.Add(1)
-	go r.SaveIntermediateOutput(ctx, intermediateMap, currentCheckpoint, &wg)
+	go r.SaveIntermediateOutput(ctx, intermediateMap, checkpointData.LastCheckpoint, &wg)
 
 	// update output map with reduced intermediate results
 	wg.Add(1)
