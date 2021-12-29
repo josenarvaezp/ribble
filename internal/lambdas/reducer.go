@@ -442,3 +442,21 @@ func (r *Reducer) updateDedupeReaderWithDedupeObject(ctx context.Context, dedupe
 
 	return nil
 }
+
+// SendFinishedEvent sends an event to the reducers-done queue to indicate
+// that the current reducers has finished processing
+func (r *Reducer) SendFinishedEvent(ctx context.Context) error {
+	queueName := fmt.Sprintf("%s-%s", r.JobID.String(), "reducers-done")
+	queueURL := GetQueueURL(queueName, r.Region, r.AccountID, r.Local)
+	currentReducerID := r.ReducerID.String()
+	params := &sqs.SendMessageInput{
+		MessageBody: &currentReducerID,
+		QueueUrl:    &queueURL,
+	}
+	_, err := r.QueuesAPI.SendMessage(ctx, params)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

@@ -230,7 +230,14 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 
 	// write reducer output
 	key := fmt.Sprintf("output/%s", r.ReducerID.String())
-	r.WriteReducerOutput(ctx, r.OutputMap, key)
+	err = r.WriteReducerOutput(ctx, r.OutputMap, key)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+
+	// indicate reducer has finished
+	err = r.SendFinishedEvent(ctx)
 	if err != nil {
 		fmt.Println(err)
 		return "", err

@@ -45,6 +45,18 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) (strin
 		return "", nil
 	}
 
+	// wait until reducers are done
+	if err := c.AreReducersDone(ctx); err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+
+	// indicate reducers are done
+	if err := c.WriteDoneObject(ctx); err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+
 	return "", nil
 }
 

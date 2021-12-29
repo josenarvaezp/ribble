@@ -137,13 +137,25 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 		return err
 	}
 
-	// Crate a queue used by mappers to indicate they have completed processing
+	// Create a queue used by mappers to indicate they have completed processing
 	mappersDoneName := fmt.Sprintf("%s-mappers-done", d.jobID.String())
 	mappersDoneParams := &sqs.CreateQueueInput{
 		QueueName: &mappersDoneName,
 	}
 
 	_, err = d.QueuesAPI.CreateQueue(ctx, mappersDoneParams)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	// Create a queue used by reducers to indicate they have completed processing
+	reducersDoneName := fmt.Sprintf("%s-reducers-done", d.jobID.String())
+	reducerDoneParams := &sqs.CreateQueueInput{
+		QueueName: &reducersDoneName,
+	}
+
+	_, err = d.QueuesAPI.CreateQueue(ctx, reducerDoneParams)
 	if err != nil {
 		fmt.Println(err)
 		return err
