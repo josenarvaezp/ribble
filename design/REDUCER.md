@@ -1,0 +1,2 @@
+## My framework considerations
+- To simplify the framework to developers, all data is combined in the mapper before sending it to the reducers. This means that the output of the mapper needs to be no larger than the memory limit of the serverless function. Note that the input data for the mapper is streamed into the mapper, hence there is no correlation between the input size with the functins's memory size. For example, a mapper that reads 1 GB, but beacause of the filtering, outputs a 1 MB size does not need to have a memory size of 1GB. 

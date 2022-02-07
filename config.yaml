@@ -1,0 +1,7 @@
+input:
+  - bucket: mybucket
+  - bucket: mysecondbucket
+output: mybucketoutput
+region: eu-west-2
+mapperFuncName: mymapper
+local: true

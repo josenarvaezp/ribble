@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  localstack:
+    container_name: localstack
+    image: localstack/localstack
+    ports:
+      - "127.0.0.1:53:53"
+      - "127.0.0.1:53:53/udp"
+      - "127.0.0.1:443:443"
+      - "127.0.0.1:4566:4566"
+      - "127.0.0.1:4571:4571"
+    environment:
+      - SERVICES=s3,lambda,sqs
+      - DEBUG=${DEBUG- }
+      - DATA_DIR=/tmp/localstack/data
+      - LAMBDA_EXECUTOR=docker
+      - LAMBDA_REMOTE_DOCKER=true
+      - LAMBDA_REMOVE_CONTAINERS=true
+      - LOCALSTACK_API_KEY=${LOCALSTACK_API_KEY- }
+      - KINESIS_ERROR_PROBABILITY=${KINESIS_ERROR_PROBABILITY- }
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - HOST_TMP_FOLDER=${TMPDIR:-/tmp/}localstack
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+  lambdamap:
+    container_name: lambdamap
+    build: 
+      context: .
+      target: lambdamap
+      dockerfile: ./Dockerfile
+    entrypoint: ["/aws-lambda/aws-lambda-rie", "/lambdas/lambdamap"]
+    ports:
+      - "9000:8080"
+    volumes:
+      - "~/.aws-lambda-rie:/aws-lambda"
+  lambdareduce:
+    container_name: lambdareduce
+    build: 
+      context: .
+      target: lambdareduce
+      dockerfile: ./Dockerfile
+    entrypoint: ["/aws-lambda/aws-lambda-rie", "/lambdas/lambdareduce"]
+    ports:
+      - "9001:8081"
+    volumes:
+      - "~/.aws-lambda-rie:/aws-lambda"
+  lambdacoordinator:
+    container_name: lambdacoordinator
+    build: 
+      context: .
+      target: lambdacoordinator
+      dockerfile: ./Dockerfile
+    entrypoint: ["/aws-lambda/aws-lambda-rie", "/lambdas/lambdacoordinator"]
+    ports:
+      - "9002:8082"
+    volumes:
+      - "~/.aws-lambda-rie:/aws-lambda"
