@@ -24,13 +24,36 @@ services:
     volumes:
       - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
-  mapper:
-    container_name: mapper
+  lambdamap:
+    container_name: lambdamap
     build: 
       context: .
+      target: lambdamap
       dockerfile: ./Dockerfile
-    entrypoint: ["/aws-lambda/aws-lambda-rie", "/lambdas/mapper"]
+    entrypoint: ["/aws-lambda/aws-lambda-rie", "/lambdas/lambdamap"]
     ports:
       - "9000:8080"
+    volumes:
+      - "~/.aws-lambda-rie:/aws-lambda"
+  lambdareduce:
+    container_name: lambdareduce
+    build: 
+      context: .
+      target: lambdareduce
+      dockerfile: ./Dockerfile
+    entrypoint: ["/aws-lambda/aws-lambda-rie", "/lambdas/lambdareduce"]
+    ports:
+      - "9001:8081"
+    volumes:
+      - "~/.aws-lambda-rie:/aws-lambda"
+  lambdacoordinator:
+    container_name: lambdacoordinator
+    build: 
+      context: .
+      target: lambdacoordinator
+      dockerfile: ./Dockerfile
+    entrypoint: ["/aws-lambda/aws-lambda-rie", "/lambdas/lambdacoordinator"]
+    ports:
+      - "9002:8082"
     volumes:
       - "~/.aws-lambda-rie:/aws-lambda"

@@ -1,22 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"context"
-	"encoding/csv"
 	"errors"
 	"fmt"
+	"log"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/josenarvaezp/displ/internal/lambdas"
 )
-
-// TODO: create different logic when full object is provided
-// this is needed to allow objects to be downloaded concurrently
-// if we use ranges, automatically concurrency does not work
 
 var m *lambdas.Mapper
 
@@ -52,7 +48,7 @@ func HandleRequest(ctx context.Context, request lambdas.MapperInput) (string, er
 		}
 
 		// user function starts here
-		mapOutput := runMapper(*filename, myfunction)
+		mapOutput := runMapper(*filename, WordCount)
 
 		// send output to reducers via queues
 		err = m.EmitMap(ctx, mapOutput, batchMetadata)
@@ -90,24 +86,22 @@ func runMapper(filename string, userMap func(filename string) map[string]int) ma
 	return userMap(filename)
 }
 
-func myfunction(filename string) map[string]int {
-	csvFile, err := os.Open(filename)
+func WordCount(filename string) map[string]int {
+	file, err := os.Open(filename)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
-	defer csvFile.Close()
+	defer file.Close()
 
-	csvLines, err := csv.NewReader(csvFile).ReadAll()
-	if err != nil {
-		fmt.Println(err)
-	}
+	scanner := bufio.NewScanner(file)
+
 	output := make(map[string]int)
-	for _, line := range csvLines {
-		count, err := strconv.Atoi(line[5])
-		if err != nil {
-			// ignore value
+	for scanner.Scan() {
+		line := scanner.Text()
+		words := strings.Fields(line)
+		for _, word := range words {
+			output[word] = output[word] + 1
 		}
-		output[line[1]] = output[line[1]] + count
 	}
 
 	return output

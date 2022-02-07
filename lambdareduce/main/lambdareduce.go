@@ -141,15 +141,6 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 				ReceiptHandle: message.ReceiptHandle,
 			}
 
-			// unmarshall message body
-			var res lambdas.MapInt
-			body := []byte(*message.Body)
-			err = json.Unmarshal(body, &res)
-			if err != nil {
-				fmt.Println(err)
-				return "", err
-			}
-
 			// get message attributes
 			currentMapID := message.MessageAttributes[lambdas.MapIDAttribute].StringValue
 			currentBatchID, err := strconv.Atoi(*message.MessageAttributes[lambdas.BatchIDAttribute].StringValue)
@@ -191,13 +182,8 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 			}
 
 			// process message
-			currentKey := res.Key
-			currentValue := res.Value
-
-			// only process value if it is not empty
-			// empty values are sent to keep the same number of events per batch
-			if res.EmptyVal != true {
-				intermediateMap[currentKey] = intermediateMap[currentKey] + currentValue
+			if err := ReduceMapSum(intermediateMap, message.Body); err != nil {
+				return "", err
 			}
 		}
 
@@ -248,4 +234,72 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 
 func main() {
 	lambda.Start(HandleRequest)
+}
+
+func ReduceMapSum(intermediateMap map[string]int, messageBody *string) error {
+	// unmarshall message body
+	var res lambdas.MapInt
+	body := []byte(*messageBody)
+	err := json.Unmarshal(body, &res)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	// process message
+	currentKey := res.Key
+	currentValue := res.Value
+
+	// only process value if it is not empty
+	// empty values are sent to keep the same number of events per batch
+	if res.EmptyVal != true {
+		intermediateMap[currentKey] = intermediateMap[currentKey] + currentValue
+	}
+
+	return nil
+}
+
+func ReduceSum(intermediateSum int, messageBody *string) (int, error) {
+	// unmarshall message body
+	var res lambdas.MapInt
+	body := []byte(*messageBody)
+	err := json.Unmarshal(body, &res)
+	if err != nil {
+		fmt.Println(err)
+		return 0, err
+	}
+
+	// process message
+	currentValue := res.Value
+
+	// only process value if it is not empty
+	// empty values are sent to keep the same number of events per batch
+	if res.EmptyVal != true {
+		intermediateSum = intermediateSum + currentValue
+	}
+
+	return intermediateSum, nil
+}
+
+func ReduceAvg(intermediateSum int, count int, messageBody *string) (int, error) {
+	// unmarshall message body
+	var res lambdas.MapInt
+	body := []byte(*messageBody)
+	err := json.Unmarshal(body, &res)
+	if err != nil {
+		fmt.Println(err)
+		return 0, err
+	}
+
+	// process message
+	currentValue := res.Value
+
+	intermediateAvg := 0
+	// only process value if it is not empty
+	// empty values are sent to keep the same number of events per batch
+	if res.EmptyVal != true {
+		intermediateAvg = (intermediateSum * (count - 1)) + currentValue/count
+	}
+
+	return intermediateAvg, nil
 }
