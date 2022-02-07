@@ -2,7 +2,6 @@
 
 Paralellizing data processing has been in the roadmap of engineers trying to create more efficient processing frameworks for a long time. Allowing paralelization into frameworks requires a set of computers than can be used to process the data, it is clear to see that the management and configuration of this resources becomes a major bottleneck. Cloud providers have created solutions for this problem by introducing managed clusters that allow users to run big data applications without the need of having on-premise clusters. An example of this is Amazon EMR, a service that allows you to configure elastic clusters running on EC2 instances in a matter of minutes. However, recent research [2] has proven that serverless data processing frameworks outperform frameworks running on managed clusters. For this reason, in this section we eveluate different existing solutions for serverless data processing in the cloud. 
 
- 
 ## AWS serveless mapreduce
 
 The simplest of frameworks is the one provided by AWS. This framework allows the users to run ad hoc map reduce jobs using a serverless architecture using AWS Lambda and S3 as its main components. It states that the solution is cheaper and faster that existing well-known MapReduce frameworks.  
@@ -117,7 +116,6 @@ Flint is a serverless framework that allows users to run processing jobs using P
 
 Intresting solutions:
 - To work around the time limit lambda functions have, Flint stops the execution of lambdas when a time limit is soon to be reached. Before this it saves its state by sending it back to the sheduler. The scheduler then uses this information to start a new lambda to start right from where the other lambda stop. 
-
 
 3. Cloud map reduce: A MapReduce Implementation on top of a Cloud Operating System  
 

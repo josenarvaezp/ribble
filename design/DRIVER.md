@@ -21,4 +21,4 @@ Once this resources are created the framwork is ready to start processing data. 
 5. At this point the driver finishes up the execution and the machine used to run it becomes free.
 
 TODO:
--> When we speak about the implementation of our driver, explain that the driver creates and invokes the processes and then it invokes a coordinator responsible of orchestrating the job for the rest of the duration. Given that the coordintaro runs in serveleress funciton, there exists a mechanism tosave its state one it reaches a timeout maximum. This allows the framewor to run in a completly serveleress manner and a job can last for more than 15 minutes. 
+-> When we speak about the implementation of our driver, explain that the driver creates and invokes the processes and then it invokes a coordinator responsible of orchestrating the job for the rest of the duration. Given that the coordintaro runs in serveleress funciton, there exists a mechanism tosave its state one it reaches a timeout maximum. This allows the framewor to run in a completly serveleress manner and a job can last for more than 15 minutes.
