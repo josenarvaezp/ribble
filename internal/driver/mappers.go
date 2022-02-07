@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -57,7 +56,7 @@ func newMapping() *Mapping {
 // Note that if the file doesn't fit in a batch it will be ignored. This allow users to process file where
 // the whole file is needed by a single mapper. An example is an aplication where the user wants to process
 // images using AI, and for this each image needs to be fed into the algorithm.
-func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context, inputBuckets []*objectstore.Bucket) ([]*Mapping, error) {
+func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context) ([]*Mapping, error) {
 	// init mappings
 	mappings := []*Mapping{}
 	firstMapping := newMapping()
@@ -67,7 +66,7 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context, inputBucke
 	var continuationToken *string
 
 	// generate mappings for all buckets
-	for i, bucket := range inputBuckets {
+	for i, bucket := range d.Config.InputBuckets {
 		// indifcates if there are more objects to be listed
 		moreObjects := true
 
@@ -80,7 +79,6 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context, inputBucke
 
 			listObjectsOuput, err := d.ObjectStoreAPI.ListObjectsV2(ctx, params)
 			if err != nil {
-				fmt.Println(err)
 				return nil, err
 			}
 
@@ -93,7 +91,7 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context, inputBucke
 			objects := objectstore.S3ObjectsToObjects(bucket.Name, listObjectsOuput.Contents)
 			partialMappings := generateMappingsForCompleteObjects(objects, lastMapping)
 
-			if !moreObjects && i == len(inputBuckets)-1 {
+			if !moreObjects && i == len(d.Config.InputBuckets)-1 {
 				// last iteration of list results, add last mapping
 				mappings = append(mappings, partialMappings...)
 			} else {
@@ -142,17 +140,16 @@ func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMappin
 }
 
 // StartMappers sends the each split into lambda
-func (s *Driver) StartMappers(ctx context.Context, mappings []*Mapping, functionName string) error {
+func (d *Driver) StartMappers(ctx context.Context, mappings []*Mapping, functionName string) error {
 	for _, currentMapping := range mappings {
 		// create payload describing split
 		requestPayload, err := json.Marshal(*currentMapping)
 		if err != nil {
-			fmt.Println("Error marshalling mapping")
 			return err
 		}
 
 		// send the mapping split into lamda
-		result, _ := s.FaasAPI.Invoke(
+		result, _ := d.FaasAPI.Invoke(
 			ctx,
 			&lambda.InvokeInput{
 				FunctionName:   aws.String(functionName),
