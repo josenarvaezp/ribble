@@ -24,7 +24,7 @@ func main() {
 	}
 
 	// set logger
-	log.SetLevel(logs.LogLevelToLevel(conf.LogLevel))
+	log.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
 	driverLogger := log.WithFields(log.Fields{
 		"Job ID": jobID.String(),
 	})
