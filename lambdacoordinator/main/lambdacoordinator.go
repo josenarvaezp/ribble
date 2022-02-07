@@ -3,22 +3,25 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
-	"github.com/josenarvaezp/displ/internal/lambdas"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
 var c *lambdas.Coordinator
 
 func init() {
+	// set logger
+	log.SetLevel(log.ErrorLevel)
+
 	var err error
 	c, err = lambdas.NewCoordinator(true)
 	if err != nil {
-		fmt.Println(err)
+		log.WithError(err).Fatal("Error starting coordinator")
 		return
 	}
 }
@@ -34,8 +37,6 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 	c.NumMappers = int64(request.NumMappers)
 	c.NumQueues = int64(request.NumQueues)
 
-	// set logger
-	log.SetLevel(log.ErrorLevel)
 	coordinatorLogger := log.WithFields(log.Fields{
 		"Job ID": c.JobID.String(),
 	})
