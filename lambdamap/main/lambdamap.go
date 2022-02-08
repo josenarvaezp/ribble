@@ -41,6 +41,7 @@ func HandleRequest(ctx context.Context, request lambdas.MapperInput) error {
 
 	mapperLogger := log.WithFields(log.Fields{
 		"Job ID": m.JobID.String(),
+		"Map ID": m.MapID.String(),
 	})
 
 	// keep a dictionary with the number of batches per queue

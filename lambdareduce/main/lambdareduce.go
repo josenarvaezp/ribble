@@ -14,24 +14,28 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	sqsTypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/josenarvaezp/displ/internal/lambdas"
+	log "github.com/sirupsen/logrus"
 )
 
 var r *lambdas.Reducer
 
 func init() {
+	// set logger
+	log.SetLevel(log.ErrorLevel)
+
 	var err error
 	r, err = lambdas.NewReducer(true)
 	if err != nil {
-		fmt.Println(err)
+		log.WithError(err).Fatal("Error starting mapper")
 		return
 	}
 }
 
-func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, error) {
+func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 	// get data from context
 	lc, ok := lambdacontext.FromContext(ctx)
 	if !ok {
-		return "", errors.New("Error getting lambda context")
+		return errors.New("Error getting lambda context")
 	}
 	r.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
 	r.ReducerID = request.ReducerID
@@ -39,13 +43,19 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 	r.NumMappers = request.NumMappers
 	r.QueuePartition = request.QueuePartition
 
+	reducerLogger := log.WithFields(log.Fields{
+		"Job ID":          r.JobID.String(),
+		"Reducer ID":      r.ReducerID.String(),
+		"Queue Partition": r.QueuePartition,
+	})
+
 	var wg sync.WaitGroup
 
 	// check if there is a checkpoint saved for this reducer
 	checkpointData, err := r.GetCheckpointData(ctx)
 	if err != nil {
-		fmt.Println(err)
-		return "", err
+		reducerLogger.WithError(err).Error("Error reading checkpoint")
+		return err
 	}
 
 	// get output map and dedupe info from checkpoints
@@ -128,8 +138,8 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 
 		output, err := r.QueuesAPI.ReceiveMessage(ctx, recieveMessageParams)
 		if err != nil {
-			fmt.Println(err)
-			return "", err
+			reducerLogger.WithError(err).Error("Error reading from queue")
+			return err
 		}
 
 		for _, message := range output.Messages {
@@ -145,13 +155,13 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 			currentMapID := message.MessageAttributes[lambdas.MapIDAttribute].StringValue
 			currentBatchID, err := strconv.Atoi(*message.MessageAttributes[lambdas.BatchIDAttribute].StringValue)
 			if err != nil {
-				fmt.Println(err)
-				return "", err
+				reducerLogger.WithError(err).Error("Error getting message batch ID")
+				return err
 			}
 			currentMessageID, err := strconv.Atoi(*message.MessageAttributes[lambdas.MessageIDAttribute].StringValue)
 			if err != nil {
-				fmt.Println(err)
-				return "", err
+				reducerLogger.WithError(err).Error("Error getting message ID")
+				return err
 			}
 
 			// check if message has already been processed
@@ -183,7 +193,8 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 
 			// process message
 			if err := ReduceMapSum(intermediateMap, message.Body); err != nil {
-				return "", err
+				reducerLogger.WithError(err).Error("Error processing message")
+				return err
 			}
 		}
 
@@ -218,18 +229,18 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) (string, e
 	key := fmt.Sprintf("output/%s", r.ReducerID.String())
 	err = r.WriteReducerOutput(ctx, r.OutputMap, key)
 	if err != nil {
-		fmt.Println(err)
-		return "", err
+		reducerLogger.WithError(err).Error("Error writing reducer output")
+		return err
 	}
 
 	// indicate reducer has finished
 	err = r.SendFinishedEvent(ctx)
 	if err != nil {
-		fmt.Println(err)
-		return "", err
+		reducerLogger.WithError(err).Error("Error sending done message")
+		return err
 	}
 
-	return "", nil
+	return nil
 }
 
 func main() {
@@ -242,7 +253,6 @@ func ReduceMapSum(intermediateMap map[string]int, messageBody *string) error {
 	body := []byte(*messageBody)
 	err := json.Unmarshal(body, &res)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -265,7 +275,6 @@ func ReduceSum(intermediateSum int, messageBody *string) (int, error) {
 	body := []byte(*messageBody)
 	err := json.Unmarshal(body, &res)
 	if err != nil {
-		fmt.Println(err)
 		return 0, err
 	}
 
@@ -287,7 +296,6 @@ func ReduceAvg(intermediateSum int, count int, messageBody *string) (int, error)
 	body := []byte(*messageBody)
 	err := json.Unmarshal(body, &res)
 	if err != nil {
-		fmt.Println(err)
 		return 0, err
 	}
 
