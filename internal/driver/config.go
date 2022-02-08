@@ -1,7 +1,6 @@
 package driver
 
 import (
-	"fmt"
 	"io/ioutil"
 
 	"github.com/josenarvaezp/displ/internal/objectstore"
@@ -15,6 +14,7 @@ type Config struct {
 	Region         string                `yaml:"region"`
 	MapperFuncName string                `yaml:"mapperFuncName"`
 	Local          bool                  `yaml:"local"`
+	LogLevel       int                   `yaml:"logLevel"`
 }
 
 // ReadLocalConfigFile reads the config file from the driver's file system
@@ -24,12 +24,10 @@ func ReadLocalConfigFile(path string) (*Config, error) {
 
 	confFile, err := ioutil.ReadFile(path)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 	err = yaml.Unmarshal(confFile, &conf)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 

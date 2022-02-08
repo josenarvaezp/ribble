@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3Types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -26,74 +25,7 @@ func (d *Driver) CreateJobBucket(ctx context.Context) error {
 
 	_, err := d.ObjectStoreAPI.CreateBucket(ctx, params)
 	if err != nil {
-		fmt.Println(err)
 		return err
-	}
-
-	return nil
-}
-
-// CreateCoordinatorNotification adds the configuration to S3 so that when the last mapper
-// finish its execution the coordinator is invoked. This is possible because the last
-// mapper will create a blank object to indicate it is done. This event is picked by
-// the S3 service and invokes the coordinator function.
-func (d *Driver) CreateCoordinatorNotification(ctx context.Context) error {
-	// TODO: create coordinator IAM role with "s3:GetObject" and resource to the folder under the bucket
-	jobBucket := d.jobID.String()
-
-	action := "lambda:InvokeFunction"
-	coordinatorName := "arn:aws:lambda:eu-west-2:694616335238:function:TODO"
-	principal := "s3.amazonaws.com"
-	statementId := "s3invoke"
-	sourceARN := fmt.Sprintf("arn:aws:s3:::%s", jobBucket)
-
-	// add permision to allow S3 to invoke the coordinator function
-	// on object creation
-	permissionInput := &lambda.AddPermissionInput{
-		Action:       &action,
-		FunctionName: &coordinatorName,
-		Principal:    &principal,
-		StatementId:  &statementId,
-		SourceArn:    &sourceARN,
-	}
-	_, err := d.FaasAPI.AddPermission(ctx, permissionInput)
-	if err != nil {
-		return err
-	}
-
-	// location where the last mapper will create the blank object
-	prefixForCoordinatorSignal := "signals/coordinator/"
-
-	// add notification configuration so that S3 can invoke the coordinator
-	// once an object in signals/coordinator/ has been created. A blank
-	// object in this file means that the last mapper has completed execution
-
-	notificationConfigInput := &s3.PutBucketNotificationConfigurationInput{
-		Bucket: &jobBucket,
-		NotificationConfiguration: &s3Types.NotificationConfiguration{
-			LambdaFunctionConfigurations: []s3Types.LambdaFunctionConfiguration{
-				{
-					Events: []s3Types.Event{
-						"s3:ObjectCreated:*",
-					},
-					LambdaFunctionArn: &coordinatorName,
-					Filter: &s3Types.NotificationConfigurationFilter{
-						Key: &s3Types.S3KeyFilter{
-							FilterRules: []s3Types.FilterRule{
-								{
-									Name:  s3Types.FilterRuleNamePrefix,
-									Value: &prefixForCoordinatorSignal,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	_, err = d.ObjectStoreAPI.PutBucketNotificationConfiguration(ctx, notificationConfigInput)
-	if err != nil {
-		fmt.Println(err)
 	}
 
 	return nil
@@ -110,7 +42,6 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 
 	dlqOutput, err := d.QueuesAPI.CreateQueue(ctx, dlqParams)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -121,7 +52,6 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 	}
 	attributes, err := d.QueuesAPI.GetQueueAttributes(ctx, getQueueAttributesParams)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 	dlqARN := attributes.Attributes["QueueArn"]
@@ -133,7 +63,6 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 
 	policyJson, err := json.Marshal(policy)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -145,7 +74,6 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 
 	_, err = d.QueuesAPI.CreateQueue(ctx, mappersDoneParams)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -157,7 +85,6 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 
 	_, err = d.QueuesAPI.CreateQueue(ctx, reducerDoneParams)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -174,7 +101,6 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 		}
 		_, err := d.QueuesAPI.CreateQueue(ctx, params)
 		if err != nil {
-			fmt.Println(err)
 			return err
 		}
 
@@ -185,7 +111,6 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 		}
 		_, err = d.QueuesAPI.CreateQueue(ctx, metaParams)
 		if err != nil {
-			fmt.Println(err)
 			return err
 		}
 	}

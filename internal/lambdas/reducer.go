@@ -310,7 +310,6 @@ func (r *Reducer) GetCheckpointData(ctx context.Context) (*CheckpointData, error
 		}
 		listObjectsOuput, err := r.ObjectStoreAPI.ListObjectsV2(ctx, params)
 		if err != nil {
-			fmt.Println(err)
 			return nil, err
 		}
 
@@ -367,7 +366,6 @@ func (r *Reducer) updateOutputWithIntermediateObject(
 	buf := manager.NewWriteAtBuffer([]byte{})
 	_, err := r.DownloaderAPI.Download(ctx, buf, params)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -414,7 +412,6 @@ func (r *Reducer) updateDedupeReaderWithDedupeObject(ctx context.Context, dedupe
 	buf := manager.NewWriteAtBuffer([]byte{})
 	_, err := r.DownloaderAPI.Download(ctx, buf, params)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 

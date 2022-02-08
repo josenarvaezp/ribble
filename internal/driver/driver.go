@@ -2,7 +2,6 @@ package driver
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/josenarvaezp/displ/internal/config"
 	"github.com/josenarvaezp/displ/internal/faas"
@@ -37,7 +36,7 @@ type Driver struct {
 }
 
 // NewDriver creates a new Driver struct
-func NewDriver(jobID uuid.UUID, configFilePath string) (*Driver, error) {
+func NewDriver(jobID uuid.UUID, conf *Config) (*Driver, error) {
 	var cfg aws.Config
 	var err error
 
@@ -46,29 +45,19 @@ func NewDriver(jobID uuid.UUID, configFilePath string) (*Driver, error) {
 		jobID: jobID,
 	}
 
-	// set config values to driver
-	conf, err := ReadLocalConfigFile(configFilePath)
-	if err != nil {
-		// TODO: add logs
-		fmt.Println(err)
-		return nil, err
-	}
+	// set configuration
 	driver.Config = *conf
 
 	if driver.Config.Local {
 		// point clients to localstack
 		cfg, err = config.InitLocalCfg()
 		if err != nil {
-			// TODO: add logs
-			fmt.Println(err)
 			return nil, err
 		}
 	} else {
 		// Load the configuration using the aws config file
 		cfg, err = config.InitCfg(driver.Config.Region)
 		if err != nil {
-			// TODO: add logs
-			fmt.Println(err)
 			return nil, err
 		}
 	}

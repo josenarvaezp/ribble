@@ -2,49 +2,64 @@ package main
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/josenarvaezp/displ/internal/driver"
+	"github.com/josenarvaezp/displ/internal/logs"
 )
 
 func main() {
 	jobID := uuid.New()
-	driver, err := driver.NewDriver(jobID, "config.yaml")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
 	ctx := context.Background()
 
-	//Setting up resources
+	// get driver config values
+	conf, err := driver.ReadLocalConfigFile("config.yaml")
+	if err != nil {
+		log.WithField(
+			"File name", "TODO: get config file name",
+		).WithError(err).Error("Error reading config file")
+		return
+	}
+
+	// set logger
+	log.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
+	driverLogger := log.WithFields(log.Fields{
+		"Job ID": jobID.String(),
+	})
+
+	// init driver
+	driver, err := driver.NewDriver(jobID, conf)
+	if err != nil {
+		driverLogger.WithError(err).Error("Error initializing the driver")
+		return
+	}
+
+	// Setting up resources
 	err = driver.CreateJobBucket(ctx)
 	if err != nil {
-		fmt.Println(err)
+		driverLogger.WithError(err).Error("Error creating the job bucket")
 		return
 	}
 
-	err = driver.CreateCoordinatorNotification(ctx)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
+	// create streams for job
 	err = driver.CreateQueues(ctx, 5) // TODO: get num of queues
 	if err != nil {
-		fmt.Println(err)
+		driverLogger.WithError(err).Error("Error creating the job streams")
 		return
 	}
 
-	mappings, err := driver.GenerateMappingsCompleteObjects(ctx, driver.Config.InputBuckets)
+	// generate mappings from S3 input bucket
+	mappings, err := driver.GenerateMappingsCompleteObjects(ctx)
 	if err != nil {
-		fmt.Println(err)
+		driverLogger.WithError(err).Error("Error generating mappings from S3")
 		return
 	}
 
 	err = driver.StartMappers(ctx, mappings, driver.Config.MapperFuncName)
 	if err != nil {
-		fmt.Println(err)
+		driverLogger.WithError(err).Error("Error starting the mappers")
 		return
 	}
 }

@@ -102,7 +102,6 @@ func (m *Mapper) DownloadFile(object objectstore.ObjectRange) (*string, error) {
 	// create temporary file to store object
 	file, err := os.Create(filepath.Join("/tmp", object.Key))
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 
