@@ -48,7 +48,7 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 	}
 
 	// invoke reducers
-	if err := c.InvokeReducers(ctx); err != nil {
+	if err := c.InvokeReducers(ctx, lambdas.ReduceMapSum); err != nil {
 		coordinatorLogger.WithError(err).Error("Error invoking reducers")
 		return nil
 	}
