@@ -137,7 +137,7 @@ func (c *Coordinator) AreMappersDone(ctx context.Context) error {
 
 // InvokeReducers is used to invoke the reducers once all mappers are done
 // there is one reducer per queue invoked
-func (c *Coordinator) InvokeReducers(ctx context.Context) error {
+func (c *Coordinator) InvokeReducers(ctx context.Context, reducerName string) error {
 	// invoke a reducer per each queue
 	for i := 0; i < int(c.NumQueues); i++ {
 		// encode reducer input to json
@@ -155,7 +155,7 @@ func (c *Coordinator) InvokeReducers(ctx context.Context) error {
 		result, _ := c.FaasAPI.Invoke(
 			ctx,
 			&lambda.InvokeInput{
-				FunctionName:   aws.String(CoordinatorName),
+				FunctionName:   aws.String(reducerName),
 				Payload:        requestPayload,
 				InvocationType: types.InvocationTypeEvent,
 			},

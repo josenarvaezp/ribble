@@ -26,6 +26,13 @@ const (
 	MaxMessagesBeforeCheckpointComplete = 15000
 )
 
+const (
+	// reducer names
+	ReduceMapSum string = "LambdaReduceMapSum"
+	ReduceSum    string = "LambdaReduceSum"
+	ReduceAvg    string = "LambdaReduceAvg"
+)
+
 // ReducerInput is the input the reducer lambda receives
 type ReducerInput struct {
 	JobID          uuid.UUID `json:"jobID"`
