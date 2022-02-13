@@ -10,8 +10,8 @@ import (
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/josenarvaezp/displ/examples/wordcount"
 	"github.com/josenarvaezp/displ/internal/lambdas"
-	"github.com/josenarvaezp/displ/myworkspace"
 	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
@@ -63,7 +63,7 @@ func HandleRequest(ctx context.Context, request lambdas.MapperInput) error {
 		}
 
 		// user function starts here
-		mapOutput := runMapSumMapper(*filename, myworkspace.WordCount)
+		mapOutput := runMapSumMapper(*filename, wordcount.WordCount)
 
 		// send output to reducers via queues
 		err = m.EmitMapSum(ctx, mapOutput, batchMetadata)
