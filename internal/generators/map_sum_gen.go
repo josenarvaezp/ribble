@@ -33,6 +33,5 @@ func ExecuteMapSumGenerator(jobID string, data FunctionData) error {
 	// generate file with template
 	t := template.Must(template.New("mapper").Parse(mapTemplate))
 	err = t.Execute(f, data)
-
 	return err
 }
