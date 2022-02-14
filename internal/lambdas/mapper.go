@@ -22,6 +22,7 @@ import (
 	"github.com/josenarvaezp/displ/internal/driver"
 	"github.com/josenarvaezp/displ/internal/objectstore"
 	"github.com/josenarvaezp/displ/internal/queues"
+	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
 // MapperInput is the input the mapper lambda receives
@@ -126,10 +127,10 @@ func (m *Mapper) DownloadFile(object objectstore.ObjectRange) (*string, error) {
 	return &filename, nil
 }
 
-// EmitMap sends the output map in batches to the queues
-func (m *Mapper) EmitMap(
+// EmitMapSum sends the output map in batches to the queues
+func (m *Mapper) EmitMapSum(
 	ctx context.Context,
-	outputMap map[string]int,
+	outputMap aggregators.MapSum,
 	batchMetadata map[int]int64,
 ) error {
 	// keep dictionary of batches to allow sending keys in batches
@@ -145,7 +146,7 @@ func (m *Mapper) EmitMap(
 			batches[partitionQueue],
 			MapInt{
 				Key:   key,
-				Value: value,
+				Value: value.Int(),
 			},
 		)
 

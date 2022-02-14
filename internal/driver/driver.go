@@ -17,16 +17,24 @@ import (
 
 // DriverInterface defines the methods available for the Driver
 type DriverInterface interface {
+	// build
+	BuildJobGenerationBinary() error
+	GenerateResourcesFromBinary() error
+	BuildDockerImages() error
+
+	// upload
 	GenerateMappingsCompleteObjects(ctx context.Context, inputBuckets []*objectstore.Bucket) ([]*Mapping, error)
-	StartMappers(ctx context.Context, mappings []*Mapping, functionName string, region string) error
 	CreateJobBucket(ctx context.Context) error
-	CreateCoordinatorNotification(ctx context.Context) error
 	CreateQueues(ctx context.Context, numQueues int)
+
+	// run
+	StartMappers(ctx context.Context, mappings []*Mapping, functionName string, region string) error
 }
 
 // Driver is a struct that implements the Driver interface
 type Driver struct {
-	jobID uuid.UUID
+	JobID   uuid.UUID
+	JobPath string
 	// clients
 	ObjectStoreAPI objectstore.ObjectStoreAPI
 	FaasAPI        faas.FaasAPI
@@ -42,7 +50,7 @@ func NewDriver(jobID uuid.UUID, conf *Config) (*Driver, error) {
 
 	// init driver with job id
 	driver := &Driver{
-		jobID: jobID,
+		JobID: jobID,
 	}
 
 	// set configuration

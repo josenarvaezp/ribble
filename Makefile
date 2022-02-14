@@ -26,3 +26,9 @@ buildr:
 
 geto:
 	awslocal s3api get-object --bucket e33e7151-8ae8-4560-93b2-5ba389949f7d --key output/7ecd2711-56d1-4d01-90a2-90b80e92c7e1 res
+
+buildcli:
+	go build -o ./testcli ./cmd/driver/main.go
+
+runclibuild:
+	./testcli build --job  ./examples/wordcount/job/job.go  

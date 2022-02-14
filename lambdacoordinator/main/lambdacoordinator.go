@@ -10,6 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
 var c *lambdas.Coordinator
@@ -48,7 +49,7 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 	}
 
 	// invoke reducers
-	if err := c.InvokeReducers(ctx); err != nil {
+	if err := c.InvokeReducers(ctx, aggregators.AggregatorMapSum); err != nil {
 		coordinatorLogger.WithError(err).Error("Error invoking reducers")
 		return nil
 	}

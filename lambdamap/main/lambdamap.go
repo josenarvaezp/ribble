@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"os"
@@ -11,7 +10,9 @@ import (
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/josenarvaezp/displ/examples/wordcount"
 	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
 var m *lambdas.Mapper
@@ -62,10 +63,10 @@ func HandleRequest(ctx context.Context, request lambdas.MapperInput) error {
 		}
 
 		// user function starts here
-		mapOutput := runMapper(*filename, WordCount)
+		mapOutput := runMapSumMapper(*filename, wordcount.WordCount)
 
 		// send output to reducers via queues
-		err = m.EmitMap(ctx, mapOutput, batchMetadata)
+		err = m.EmitMapSum(ctx, mapOutput, batchMetadata)
 		if err != nil {
 			mapperLogger.
 				WithFields(log.Fields{
@@ -114,23 +115,6 @@ func runMapper(filename string, userMap func(filename string) map[string]int) ma
 	return userMap(filename)
 }
 
-func WordCount(filename string) map[string]int {
-	file, err := os.Open(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-
-	output := make(map[string]int)
-	for scanner.Scan() {
-		line := scanner.Text()
-		words := strings.Fields(line)
-		for _, word := range words {
-			output[word] = output[word] + 1
-		}
-	}
-
-	return output
+func runMapSumMapper(filename string, userMap func(filename string) aggregators.MapSum) aggregators.MapSum {
+	return userMap(filename)
 }

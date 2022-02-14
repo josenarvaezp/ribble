@@ -15,7 +15,7 @@ import (
 // CreateJobBucket creates a bucket for the job. This bucket is used as the working directory
 // for the job's intermediate output.
 func (d *Driver) CreateJobBucket(ctx context.Context) error {
-	bucket := d.jobID.String()
+	bucket := d.JobID.String()
 	params := &s3.CreateBucketInput{
 		Bucket: &bucket,
 		CreateBucketConfiguration: &s3Types.CreateBucketConfiguration{
@@ -35,7 +35,7 @@ func (d *Driver) CreateJobBucket(ctx context.Context) error {
 // to send data from the mappers to the reducers.
 func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 	// create dead-letter queue
-	dlqName := fmt.Sprintf("%s-%s", d.jobID.String(), "dlq")
+	dlqName := fmt.Sprintf("%s-%s", d.JobID.String(), "dlq")
 	dlqParams := &sqs.CreateQueueInput{
 		QueueName: &dlqName,
 	}
@@ -67,7 +67,7 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 	}
 
 	// Create a queue used by mappers to indicate they have completed processing
-	mappersDoneName := fmt.Sprintf("%s-mappers-done", d.jobID.String())
+	mappersDoneName := fmt.Sprintf("%s-mappers-done", d.JobID.String())
 	mappersDoneParams := &sqs.CreateQueueInput{
 		QueueName: &mappersDoneName,
 	}
@@ -78,7 +78,7 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 	}
 
 	// Create a queue used by reducers to indicate they have completed processing
-	reducersDoneName := fmt.Sprintf("%s-reducers-done", d.jobID.String())
+	reducersDoneName := fmt.Sprintf("%s-reducers-done", d.JobID.String())
 	reducerDoneParams := &sqs.CreateQueueInput{
 		QueueName: &reducersDoneName,
 	}
@@ -91,7 +91,7 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 	for i := 0; i < numQueues; i++ {
 		// create queues where data from mappers will be sent to
 		// name of the queues takes the job id as prefix
-		currentQueueName := fmt.Sprintf("%s-%d", d.jobID.String(), i)
+		currentQueueName := fmt.Sprintf("%s-%d", d.JobID.String(), i)
 		params := &sqs.CreateQueueInput{
 			QueueName: &currentQueueName,
 			Attributes: map[string]string{
@@ -105,7 +105,7 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 		}
 
 		// create a metadata queue for each queue
-		currentMetadataQueueName := fmt.Sprintf("%s-%d-meta", d.jobID.String(), i)
+		currentMetadataQueueName := fmt.Sprintf("%s-%d-meta", d.JobID.String(), i)
 		metaParams := &sqs.CreateQueueInput{
 			QueueName: &currentMetadataQueueName,
 		}
