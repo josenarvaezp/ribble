@@ -26,7 +26,7 @@ func init() {
 	var err error
 	r, err = lambdas.NewMapSumReducer(true)
 	if err != nil {
-		log.WithError(err).Fatal("Error starting mapper")
+		log.WithError(err).Fatal("Errorf starting mapper")
 		return
 	}
 }

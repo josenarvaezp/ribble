@@ -11,13 +11,15 @@ import (
 
 const (
 	// name of directories and flags for binary
-	pathToRoot              = "."
-	binaryNameToBuildJob    = "gen_job"
-	workspaceFlag           = "--workspace"
-	jobIdFlag               = "--job-id"
-	scriptToGenerateGoFiles = "./build/generate_lambda_files.sh"
-	scriptToBuildImages     = "./build/build_dockerfiles.sh"
-	GeneratedFilesDir       = "./build/lambda_gen"
+	pathToRoot                    = "."
+	binaryNameToBuildJob          = "gen_job"
+	workspaceFlag                 = "--workspace"
+	jobIdFlag                     = "--job-id"
+	scriptToGenerateGoFiles       = "./build/generate_lambda_files.sh"
+	scriptToBuildImages           = "./build/build_dockerfiles.sh"
+	scriptToBuildAggregatorImages = "./build/build_aggregators.sh"
+	GeneratedFilesDir             = "./build/lambda_gen"
+	AggregatorDockerfiles         = "./build/aggregators"
 )
 
 // BuildJobGenerationBinary generates a binary file that is used to generate
@@ -57,9 +59,18 @@ func (d *Driver) GenerateResourcesFromBinary() error {
 	return nil
 }
 
+func (d *Driver) BuildAggregatorImages() error {
+	_, err := exec.Command(scriptToBuildAggregatorImages).Output()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // BuildDockerImages is used to generate the images from the generated
 // dockerfiles
-func (d *Driver) BuildDockerImages() error {
+func (d *Driver) BuildDockerCustomImages() error {
 	// build docker files
 	dockefilesDir := fmt.Sprintf( // ./build/lambda_gen/JOB_ID/dockerfiles
 		"%s/%s/dockerfiles",

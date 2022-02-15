@@ -98,7 +98,7 @@ RUN go build -o /build/lambdas/ ./build/lambda_gen/{{.JobID}}/{{.FunctionType}}/
 # Build runtime for {{.FunctionType}}_{{.JobID}}
 FROM alpine as {{.FunctionType}}_{{.JobID}}
 COPY --from=build /build/lambdas/{{.FunctionName}} /lambdas/{{.FunctionName}}
-ENTRYPOINT [ "/lambdas/{{.FunctionType}}" ]
+ENTRYPOINT [ "/lambdas/{{.FunctionName}}" ]
 `
 
 const mapTemplate = `
