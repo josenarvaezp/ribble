@@ -13,7 +13,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/josenarvaezp/displ/internal/lambdas"
-	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
 var c *lambdas.Coordinator

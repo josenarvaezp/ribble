@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/josenarvaezp/displ/internal/lambdas"
 	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
@@ -47,25 +48,25 @@ func GetFunctionData(i interface{}) FunctionData {
 
 // ValidateMapper gets a mapper function as input and check that its
 // return type is a valid aggregator type
-func ValidateMapper(mapper interface{}) (aggregators.AggregatorType, error) {
+func ValidateMapper(mapper interface{}) (lambdas.AggregatorType, error) {
 	mapperType := reflect.TypeOf(mapper)
 
 	// validate that the input of the function gets one argument
 	// which should be the filename
 	if mapperType.NumIn() != 1 {
-		return aggregators.InvalidAggregator,
+		return lambdas.InvalidAggregator,
 			errors.New("Invalid error signature. The mapper function can only take the filename as input")
 	}
 
 	// validate the input of function is a string
 	if !mapperType.In(0).ConvertibleTo(stringType) {
-		return aggregators.InvalidAggregator,
+		return lambdas.InvalidAggregator,
 			errors.New("Invalid error signature. The input to the function should be a string")
 	}
 
 	// validate that the function returns a single value
 	if mapperType.NumOut() != 1 {
-		return aggregators.InvalidAggregator, errors.New("The mapper function can only have one output")
+		return lambdas.InvalidAggregator, errors.New("The mapper function can only have one output")
 	}
 
 	// return the aggregator specified or return error if the output
@@ -73,30 +74,30 @@ func ValidateMapper(mapper interface{}) (aggregators.AggregatorType, error) {
 	aggregatorType := mapperType.Out(0)
 
 	if aggregatorType.ConvertibleTo(mapSumType) {
-		return aggregators.MapSumAggregator, nil
+		return lambdas.MapSumAggregator, nil
 	}
 
 	if aggregatorType.ConvertibleTo(sumType) {
-		return aggregators.SumAggregator, nil
+		return lambdas.SumAggregator, nil
 	}
 
-	return aggregators.InvalidAggregator, errors.New("Aggregator is invalid")
+	return lambdas.InvalidAggregator, errors.New("Aggregator is invalid")
 }
 
 // ExecuteMapperGenerator generates code for the mapper according
 // to the aggregator used
 func ExecuteMapperGenerator(
 	jobID string,
-	aggregatorType aggregators.AggregatorType,
+	aggregatorType lambdas.AggregatorType,
 	functionData FunctionData,
 ) error {
 	switch aggregatorType {
-	case aggregators.MapSumAggregator:
+	case lambdas.MapSumAggregator:
 		err := ExecuteMapSumGenerator(jobID, functionData)
 		if err != nil {
 			return err
 		}
-	case aggregators.SumAggregator:
+	case lambdas.SumAggregator:
 		return errors.New("Unimplemented")
 	default:
 		return errors.New("Invalid aggregator")

@@ -6,7 +6,7 @@ import (
 	"text/template"
 
 	"github.com/josenarvaezp/displ/internal/driver"
-	"github.com/josenarvaezp/displ/pkg/aggregators"
+	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
 // CoordinatorData defines the data needed for the template
@@ -15,7 +15,7 @@ type CoordinatorData struct {
 }
 
 // ExecuteCoordinatorGenerator generates a go file with the auto generated code
-func ExecuteCoordinatorGenerator(jobID string, aggregatorType aggregators.AggregatorType) error {
+func ExecuteCoordinatorGenerator(jobID string, aggregatorType lambdas.AggregatorType) error {
 	// get string representation of the aggregator function
 	internalAggregator, err := AggregatorTypeToInternalFunction(aggregatorType)
 	if err != nil {
