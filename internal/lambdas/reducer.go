@@ -18,6 +18,23 @@ import (
 	"github.com/josenarvaezp/displ/internal/config"
 	"github.com/josenarvaezp/displ/internal/objectstore"
 	"github.com/josenarvaezp/displ/internal/queues"
+	"github.com/josenarvaezp/displ/pkg/aggregators"
+)
+
+type AggregatorType int64
+
+const (
+	// Aggregator types
+	InvalidAggregator AggregatorType = iota
+	MapSumAggregator
+	SumAggregator
+)
+
+const (
+	// ECR repo aggregator names
+	ECRAggregatorMapSum string = "AggregatorMapSum"
+	ECRAggregatorSum    string = "AggregatorSum"
+	ECRAggregatorAvg    string = "AggregatorAvg"
 )
 
 const (
@@ -49,13 +66,13 @@ type Reducer struct {
 	NumMappers     int
 	QueuePartition int
 	Local          bool
-	OutputMap      map[string]int
+	Output         aggregators.Aggregator
 	Dedupe         *Dedupe
 	mu             sync.Mutex
 }
 
-// NewReducer initializes a new reducer with its required clients
-func NewReducer(
+// NewMapSumReducer initializes a new reducer with its required clients
+func NewMapSumReducer(
 	local bool,
 ) (*Reducer, error) {
 	var cfg aws.Config
@@ -66,10 +83,10 @@ func NewReducer(
 
 	// init mapper
 	reducer := &Reducer{
-		Region:    region,
-		Local:     local,
-		OutputMap: make(map[string]int),
-		Dedupe:    InitDedupe(),
+		Region: region,
+		Local:  local,
+		Output: make(aggregators.MapSum),
+		Dedupe: InitDedupe(),
 	}
 
 	// create config
@@ -102,9 +119,9 @@ func NewReducer(
 }
 
 // WriteReducerOutput writes the output of the reducer to objectstore
-func (r *Reducer) WriteReducerOutput(ctx context.Context, outputMap map[string]int, key string) error {
+func (r *Reducer) WriteReducerOutput(ctx context.Context, output aggregators.Aggregator, key string) error {
 	// encode map to JSON
-	p, err := json.Marshal(outputMap)
+	p, err := json.Marshal(output)
 	if err != nil {
 		return err
 	}
@@ -179,7 +196,7 @@ func (r *Reducer) GetNumberOfBatchesToProcess(ctx context.Context) (*int, error)
 // SaveIntermediateOutput saves the intermediate output into an S3 object
 func (r *Reducer) SaveIntermediateOutput(
 	ctx context.Context,
-	intermediateMap map[string]int,
+	intermediateMap aggregators.Aggregator,
 	currentCheckpoint int,
 	wg *sync.WaitGroup,
 ) error {
@@ -221,16 +238,6 @@ func (r *Reducer) SaveIntermediateDedupe(ctx context.Context, currentCheckpoint 
 	}
 
 	return nil
-}
-
-// UpdateOutputMap merges the outputMap with the intermediate map
-func (r *Reducer) UpdateOutputMap(intermediateMap map[string]int, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	// update output map values
-	for k, v := range intermediateMap {
-		r.OutputMap[k] = r.OutputMap[k] + v
-	}
 }
 
 // DeleteIntermediateMessagesFromQueue deletes the read messages from sqs
@@ -357,8 +364,6 @@ func (r *Reducer) updateOutputWithIntermediateObject(
 	intermediateOutputObject objectstore.Object,
 	wg *sync.WaitGroup,
 ) error {
-	defer wg.Done()
-
 	params := &s3.GetObjectInput{
 		Bucket: &intermediateOutputObject.Bucket,
 		Key:    &intermediateOutputObject.Key,
@@ -380,9 +385,8 @@ func (r *Reducer) updateOutputWithIntermediateObject(
 	// use mutex to get consistent result
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for k, v := range res {
-		r.OutputMap[k] = r.OutputMap[k] + v
-	}
+
+	r.Output.UpdateOutput(res, wg)
 
 	return nil
 }
