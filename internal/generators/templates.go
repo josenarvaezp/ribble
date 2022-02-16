@@ -77,14 +77,19 @@ func main() {
 `
 
 const dockerfileTemplate = `
-FROM golang:1.16-alpine as build
+FROM golang as build
+
+ARG CGO_ENABLED=0
 
 # create work directory
 WORKDIR /build
 
+# install tools
+RUN apt-get update && apt-get install -y upx
+
 # add dependancies
 ADD go.mod go.sum ./
-ADD ./vendor ./vendor
+RUN go mod download
 
 # add source files
 ADD ./pkg ./pkg
@@ -93,11 +98,16 @@ ADD ./build/lambda_gen/{{.JobID}} ./build/lambda_gen/{{.JobID}}
 ADD ./{{.Workspace}} ./{{.Workspace}}
 
 # build lambdas
-RUN go build -o /build/lambdas/ ./build/lambda_gen/{{.JobID}}/{{.FunctionType}}/{{.FunctionName}}.go
+RUN go build -ldflags "-s -w" -o /build/lambdas/ ./build/lambda_gen/{{.JobID}}/{{.FunctionType}}/{{.FunctionName}}.go
+
+# compress
+RUN upx --best --lzma /build/lambdas/{{.FunctionName}}
 
 # Build runtime for {{.FunctionType}}_{{.JobID}}
-FROM alpine as {{.FunctionType}}_{{.JobID}}
+FROM scratch as {{.FunctionType}}
+
 COPY --from=build /build/lambdas/{{.FunctionName}} /lambdas/{{.FunctionName}}
+
 ENTRYPOINT [ "/lambdas/{{.FunctionName}}" ]
 `
 
