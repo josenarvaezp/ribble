@@ -55,9 +55,9 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "displ",
-	Short: "Displ is a distributed framework to process data in a serverless architecture",
-	Long:  `Displ is a distributed framework to process data in a serverless architecture`,
+	Use:   "ribble",
+	Short: "Ribble is a distributed framework to process data in a serverless architecture",
+	Long:  `Ribble is a distributed framework to process data in a serverless architecture`,
 }
 
 var buildCmd = &cobra.Command{
@@ -98,11 +98,18 @@ var buildCmd = &cobra.Command{
 			return
 		}
 
-		// build docker files
+		// build mapper and coordinator docker images
 		fmt.Println("Generating Images...")
-		err = jobDriver.BuildDockerImages()
+		err = jobDriver.BuildDockerCustomImages()
 		if err != nil {
 			driverLogger.WithError(err).Fatal("Error building images")
+			return
+		}
+
+		// build aggregator images
+		err = jobDriver.BuildAggregatorImages()
+		if err != nil {
+			driverLogger.WithError(err).Fatal("Error building aggregator images")
 			return
 		}
 

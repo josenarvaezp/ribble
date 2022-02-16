@@ -1,0 +1,1 @@
+# source: https://prog.world/optimizing-the-size-of-the-go-binary/

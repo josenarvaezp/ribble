@@ -2,27 +2,14 @@ package aggregators
 
 import (
 	"encoding/json"
-)
-
-const (
-	// ECR repo aggregator names
-	// TODO: add prefix with framework name
-	AggregatorMapSum string = "AggregatorMapSum"
-	AggregatorSum    string = "AggregatorSum"
-	AggregatorAvg    string = "AggregatorAvg"
-)
-
-type AggregatorType int64
-
-const (
-	InvalidAggregator AggregatorType = iota
-	MapSumAggregator
-	SumAggregator
+	"errors"
+	"sync"
 )
 
 // Aggregator is an interface used to define new aggregators
 type Aggregator interface {
 	Reduce(messageBody *string) error
+	UpdateOutput(intermediate interface{}, wg *sync.WaitGroup) error
 }
 
 // MapSum aggregates values from the same key by adding
@@ -47,6 +34,24 @@ func (ms MapSum) Reduce(messageBody *string) error {
 	// empty values are sent to keep the same number of events per batch
 	if res.EmptyVal != true {
 		ms[currentKey] = ms[currentKey] + currentValue
+	}
+
+	return nil
+}
+
+// UpdateOutput merges the outputMap with the intermediate map
+func (ms MapSum) UpdateOutput(intermediateMap interface{}, wg *sync.WaitGroup) error {
+	defer wg.Done()
+
+	// cast intermediate map
+	intermediateMapCast, ok := intermediateMap.(MapSum)
+	if !ok {
+		return errors.New("Error updating output")
+	}
+
+	// update output map values
+	for k, v := range intermediateMapCast {
+		ms[k] = ms[k] + v
 	}
 
 	return nil
