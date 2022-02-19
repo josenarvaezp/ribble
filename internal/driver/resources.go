@@ -3,13 +3,18 @@ package driver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	lambdaTypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3Types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
+	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
 // CreateJobBucket creates a bucket for the job. This bucket is used as the working directory
@@ -117,6 +122,47 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 
 	// wait one second before the queues can be used
 	time.Sleep(1 * time.Second)
+
+	return nil
+}
+
+// StartCoordinator starts a job coordinator
+func (d *Driver) StartCoordinator(ctx context.Context, numMappers int, numQueues int) error {
+	// coordinator input
+	request := &lambdas.CoordinatorInput{
+		JobID:      d.JobID,
+		NumMappers: numMappers,
+		NumQueues:  numQueues,
+	}
+
+	// create payload
+	requestPayload, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+
+	// image name
+	imageName := fmt.Sprintf(
+		"%s:%s",
+		d.BuildData.CoordinatorData.ImageName,
+		d.BuildData.CoordinatorData.ImageTag,
+	)
+
+	// send the mapping split into lamda
+	result, _ := d.FaasAPI.Invoke(
+		ctx,
+		&lambda.InvokeInput{
+			FunctionName:   aws.String(imageName),
+			Payload:        requestPayload,
+			InvocationType: lambdaTypes.InvocationTypeEvent,
+		},
+	)
+
+	// error is ignored from asynch invokation and result only holds the status code
+	// check status code
+	if result.StatusCode != SUCCESS_CODE {
+		return errors.New("Error starting coordintator")
+	}
 
 	return nil
 }

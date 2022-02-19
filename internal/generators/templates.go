@@ -104,7 +104,7 @@ RUN go build -ldflags "-s -w" -o /build/lambdas/ ./build/lambda_gen/{{.JobID}}/{
 RUN upx --best --lzma /build/lambdas/{{.FunctionName}}
 
 # Build runtime for {{.FunctionType}}_{{.JobID}}
-FROM scratch as {{.FunctionType}}
+FROM alpine as {{.FunctionType}}
 
 COPY --from=build /build/lambdas/{{.FunctionName}} /lambdas/{{.FunctionName}}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -122,10 +123,22 @@ func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMappin
 }
 
 // StartMappers sends the each split into lambda
-func (d *Driver) StartMappers(ctx context.Context, mappings []*lambdas.Mapping, functionName string) error {
+func (d *Driver) StartMappers(ctx context.Context, mappings []*lambdas.Mapping) error {
+	// image name
+	imageName := fmt.Sprintf(
+		"%s:%s",
+		d.BuildData.MapperData.ImageName,
+		d.BuildData.MapperData.ImageTag,
+	)
+
 	for _, currentMapping := range mappings {
 		// create payload describing split
-		requestPayload, err := json.Marshal(*currentMapping)
+		input := &lambdas.MapperInput{
+			JobID:   d.JobID,
+			Mapping: *currentMapping,
+		}
+
+		requestPayload, err := json.Marshal(input)
 		if err != nil {
 			return err
 		}
@@ -134,7 +147,7 @@ func (d *Driver) StartMappers(ctx context.Context, mappings []*lambdas.Mapping, 
 		result, _ := d.FaasAPI.Invoke(
 			ctx,
 			&lambda.InvokeInput{
-				FunctionName:   aws.String(functionName),
+				FunctionName:   aws.String(imageName),
 				Payload:        requestPayload,
 				InvocationType: types.InvocationTypeEvent,
 			},

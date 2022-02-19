@@ -33,6 +33,7 @@ type DriverInterface interface {
 	CreateQueues(ctx context.Context, numQueues int)
 
 	// run
+	StartCoordinator(ctx context.Context, functionName string, numMappers int, numQueues int) error
 	StartMappers(ctx context.Context, mappings []*lambdas.Mapping, functionName string, region string) error
 }
 
