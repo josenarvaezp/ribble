@@ -9,12 +9,12 @@ import (
 
 // Config represents the configuration file specified by the user
 type Config struct {
-	InputBuckets   []*objectstore.Bucket `yaml:"input"`
-	OutputBucket   string                `yaml:"output"`
-	Region         string                `yaml:"region"`
-	MapperFuncName string                `yaml:"mapperFuncName"`
-	Local          bool                  `yaml:"local"`
-	LogLevel       int                   `yaml:"logLevel"`
+	InputBuckets []*objectstore.Bucket `yaml:"input"`
+	OutputBucket string                `yaml:"output"`
+	Region       string                `yaml:"region"`
+	Local        bool                  `yaml:"local"`
+	LogLevel     int                   `yaml:"logLevel"`
+	AccountID    string                `yaml:"accountID"`
 }
 
 // ReadLocalConfigFile reads the config file from the driver's file system

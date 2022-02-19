@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/josenarvaezp/displ/internal/driver"
+	"github.com/josenarvaezp/displ/internal/generators"
 	"github.com/josenarvaezp/displ/internal/logs"
 )
 
@@ -47,9 +48,13 @@ func init() {
 
 func main() {
 	rootCmd.AddCommand(buildCmd)
+	rootCmd.AddCommand(uploadCmd)
 
 	buildCmd.PersistentFlags().StringVar(&jobPath, "job", "", "path to go file defining job")
-	buildCmd.MarkFlagRequired("job")
+	buildCmd.MarkPersistentFlagRequired("job")
+
+	uploadCmd.PersistentFlags().StringVar(&jobID, "job-id", "", "id of job to upload")
+	uploadCmd.MarkPersistentFlagRequired("job-id")
 
 	rootCmd.Execute()
 }
@@ -66,7 +71,10 @@ var buildCmd = &cobra.Command{
 	Long:  `Build the resources needed for the processing job`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// add job path info to driver
-		jobDriver.JobPath = jobPath
+		jobDriver.BuildData = &generators.BuildData{
+			JobPath:  jobPath,
+			BuildDir: fmt.Sprintf("./build/lambda_gen/%s", jobDriver.JobID.String()),
+		}
 
 		// add loger info
 		driverLogger := logrus.WithFields(logrus.Fields{
@@ -74,9 +82,8 @@ var buildCmd = &cobra.Command{
 		})
 
 		// build directory for job's generated files
-		genDirNameForJob := fmt.Sprintf("%s/%s", driver.GeneratedFilesDir, jobDriver.JobID.String())
-		if _, err := os.Stat(genDirNameForJob); os.IsNotExist(err) {
-			err := os.MkdirAll(genDirNameForJob, os.ModePerm)
+		if _, err := os.Stat(jobDriver.BuildData.BuildDir); os.IsNotExist(err) {
+			err := os.MkdirAll(jobDriver.BuildData.BuildDir, os.ModePerm)
 			if err != nil {
 				driverLogger.WithError(err).Fatal("Error creating directory")
 				return
@@ -114,6 +121,43 @@ var buildCmd = &cobra.Command{
 		}
 
 		fmt.Println("Build successful with Job ID: ", jobDriver.JobID)
+	},
+}
+
+var uploadCmd = &cobra.Command{
+	Use:   "upload",
+	Short: "Upload the resources needed for the processing job",
+	Long:  `Upload the resources needed for the processing job`,
+	Run: func(cmd *cobra.Command, args []string) {
+		// add job path info to driver
+		jobID, err := uuid.Parse(jobID)
+		if err != nil {
+			logrus.WithError(err).Error("Error parsing ID, it must be an uuid")
+			return
+		}
+		jobDriver.JobID = jobID
+
+		// add loger info
+		driverLogger := logrus.WithFields(logrus.Fields{
+			"Job ID": jobDriver.JobID.String(),
+		})
+
+		// get build data
+		buildData, err := generators.ReadBuildData(jobDriver.JobID.String())
+		if err != nil {
+			logrus.WithError(err).Error("Error reading build data")
+			return
+		}
+		jobDriver.BuildData = buildData
+
+		// upload images to amazon ECR
+		err = jobDriver.UploadJobImages(context.Background())
+		if err != nil {
+			driverLogger.WithError(err).Error("Error uploading images")
+			return
+		}
+
+		fmt.Println("Upload successful with Job ID: ", jobDriver.JobID)
 	},
 }
 
@@ -158,7 +202,7 @@ func run() {
 		return
 	}
 
-	err = driver.StartMappers(ctx, mappings, driver.Config.MapperFuncName)
+	err = driver.StartMappers(ctx, mappings, "TODO")
 	if err != nil {
 		driverLogger.WithError(err).Error("Error starting the mappers")
 		return

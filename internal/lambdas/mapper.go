@@ -19,16 +19,33 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/config"
-	"github.com/josenarvaezp/displ/internal/driver"
 	"github.com/josenarvaezp/displ/internal/objectstore"
 	"github.com/josenarvaezp/displ/internal/queues"
 	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
+// Mapping represents the collection of objects that are used as input
+// for the Mapping stage of the framework. Each mapper recieves an
+// input which may contain one or multiple objects, depeding on their size.
+type Mapping struct {
+	MapID     uuid.UUID                 `json:"id"`
+	Objects   []objectstore.ObjectRange `json:"rangeObjects"`
+	Size      int64                     `json:"size"`
+	NumQueues int64                     `json:"queues"`
+}
+
+// NewMapping initialises the M with an id and size 0
+func NewMapping() *Mapping {
+	return &Mapping{
+		MapID: uuid.New(),
+		Size:  0,
+	}
+}
+
 // MapperInput is the input the mapper lambda receives
 type MapperInput struct {
-	JobID   uuid.UUID      `json:"jobID"`
-	Mapping driver.Mapping `json:"mapping"`
+	JobID   uuid.UUID `json:"jobID"`
+	Mapping Mapping   `json:"mapping"`
 }
 
 // MapperAPI is an interface deining the functions available to the mapper

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/josenarvaezp/displ/internal/driver"
 	"github.com/josenarvaezp/displ/internal/utils"
 )
 
@@ -21,7 +20,7 @@ type DockerfileData struct {
 // ExecuteDockerfileGenerator generates a dockerfile with the auto generated code
 func ExecuteDockerfileGenerator(jobID string, workspace string) error {
 	// dir and file where generated code is writen to
-	generatedDirName := fmt.Sprintf("%s/%s", driver.GeneratedFilesDir, jobID)
+	generatedDirName := fmt.Sprintf("%s/%s", GeneratedFilesDir, jobID)
 	dockerfileDirName := fmt.Sprintf("%s/dockerfiles", generatedDirName)
 
 	// create dir
