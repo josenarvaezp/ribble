@@ -13,13 +13,13 @@ make rund:
 	go run ./cmd/driver/main.go
 
 runm:
-	curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{"jobID": "ea11106c-27cd-45d8-8fae-2315d3c62248", "mapping": {"id": "fa44fa0d-89de-416f-badc-00e2300acad2", "queues": 5, "size": 2713576,"rangeObjects": [{"objectBucket":"mybucket", "objectKey":"file1.csv","initialByte": 0,"finalByte": 1356788}, {"objectBucket":"mysecondbucket","objectKey":"file3.csv","initialByte": 0,"finalByte": 1356788}]}}'
+	curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{"jobID": "1220edd7-6904-44c3-bb35-5679fe3dee74", "mapping": {"id": "fa44fa0d-89de-416f-badc-00e2300acad2", "queues": 5, "size": 2713576,"rangeObjects": [{"objectBucket":"mybucket", "objectKey":"file1.csv","initialByte": 0,"finalByte": 1356788}, {"objectBucket":"mysecondbucket","objectKey":"file3.csv","initialByte": 0,"finalByte": 1356788}]}}'
 
 runr:
-	curl -XPOST "http://localhost:9001/2015-03-31/functions/function/invocations" -d '{"jobID": "c7559a18-deda-44be-ad62-e33cd1546d09", "jobBucket": "jobbucket", "queueName": "e9a2c4c7-abb3-4c19-87bc-62e221da864a"}'
+	curl -XPOST "http://localhost:9001/2015-03-31/functions/function/invocations" -d '{"jobID": "e9352b6f-3255-47d1-a185-c854722f92a1", "jobBucket": "jobbucket", "queueName": "e9a2c4c7-abb3-4c19-87bc-62e221da864a"}'
 
 runc:
-	curl -XPOST "http://localhost:9002/2015-03-31/functions/function/invocations" -d '{"jobID": "39ca4104-3278-4c95-a993-cc183b55485b", "numQueues": 5, "numMappers": 1}'
+	curl -XPOST "http://localhost:9002/2015-03-31/functions/function/invocations" -d '{"jobID": "e9352b6f-3255-47d1-a185-c854722f92a1", "numQueues": 5, "numMappers": 1}'
 
 buildr:
 	docker build -t reducer .
@@ -35,3 +35,31 @@ runclibuild:
 
 remove_images:
 	docker images | grep none | awk '{ print $3; }' | xargs docker rmi
+
+
+
+set:
+	awslocal s3 mb s3://input-bucket
+	awslocal s3 cp ./test.txt s3://input-bucket/test.txt
+
+# run build
+# run upload
+
+# docker run -d -v ~/.aws-lambda-rie:/aws-lambda --entrypoint /aws-lambda/aws-lambda-rie  -p 9000:8080 coordinator_1220edd7-6904-44c3-bb35-5679fe3dee74:latest /lambdas/coordinator
+# curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{"jobID": "1220edd7-6904-44c3-bb35-5679fe3dee74", "numQueues": 5, "numMappers": 1}'
+
+# docker run -d -v ~/.aws-lambda-rie:/aws-lambda --entrypoint /aws-lambda/aws-lambda-rie  -p 9004:8080 wordcount_1220edd7-6904-44c3-bb35-5679fe3dee74:latest /lambdas/WordCount
+# curl -XPOST "http://localhost:9004/2015-03-31/functions/function/invocations" -d '{"jobID": "1220edd7-6904-44c3-bb35-5679fe3dee74", "numQueues": 5, "numMappers": 1}'
+
+
+clean-iam:
+	awslocal iam detach-role-policy --role-name ribble --policy-arn arn:aws:iam::000000000000:policy/ribblePolicy
+	awslocal iam detach-user-policy --user-name jose --policy-arn arn:aws:iam::000000000000:policy/assumeRibblePolicy
+	awslocal iam delete-policy --policy-arn arn:aws:iam::000000000000:policy/ribblePolicy
+	awslocal iam delete-policy --policy-arn arn:aws:iam::000000000000:policy/assumeRibblePolicy
+	awslocal iam delete-role --role-name ribble
+
+list-iam:
+	awslocal iam list-policies | grep ribble
+	awslocal iam list-policies | grep Ribble
+	awslocal iam list-roles | grep ribble

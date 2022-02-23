@@ -17,31 +17,12 @@ import (
 
 var (
 	// Used for CLI flags
-	jobPath   string
-	jobID     string
-	accountID string
-	username  string
+	jobPath    string
+	jobID      string
+	accountID  string
+	username   string
+	configFile string
 )
-
-var (
-	// vars used in init
-	conf             *config.Config
-	readLocalConfErr error
-)
-
-func init() {
-	// get driver config values
-	conf, readLocalConfErr = config.ReadLocalConfigFile("config.yaml")
-	if readLocalConfErr != nil {
-		logrus.WithField(
-			"File name", "TODO: get config file name",
-		).WithError(readLocalConfErr).Error("Error reading config file")
-		return
-	}
-
-	// set logger
-	logrus.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
-}
 
 func main() {
 	rootCmd.AddCommand(buildCmd)
@@ -50,19 +31,26 @@ func main() {
 	rootCmd.AddCommand(setCredsCmd)
 
 	setCredsCmd.PersistentFlags().StringVar(&accountID, "account-id", "", "AWS account id")
-	setCredsCmd.MarkFlagRequired("account-id")
-
 	setCredsCmd.PersistentFlags().StringVar(&username, "username", "", "AWS username")
+	setCredsCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
+	setCredsCmd.MarkFlagRequired("account-id")
 	setCredsCmd.MarkFlagRequired("username")
+	setCredsCmd.MarkPersistentFlagRequired("config")
 
 	buildCmd.PersistentFlags().StringVar(&jobPath, "job", "", "path to go file defining job")
+	buildCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
 	buildCmd.MarkPersistentFlagRequired("job")
+	buildCmd.MarkPersistentFlagRequired("config")
 
 	uploadCmd.PersistentFlags().StringVar(&jobID, "job-id", "", "id of job to upload")
+	uploadCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
 	uploadCmd.MarkPersistentFlagRequired("job-id")
+	uploadCmd.MarkPersistentFlagRequired("config")
 
 	runCmd.PersistentFlags().StringVar(&jobID, "job-id", "", "id of job to run")
+	runCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
 	runCmd.MarkPersistentFlagRequired("job-id")
+	runCmd.MarkPersistentFlagRequired("config")
 
 	rootCmd.Execute()
 }
@@ -78,6 +66,19 @@ var buildCmd = &cobra.Command{
 	Short: "Build the resources needed for the processing job",
 	Long:  `Build the resources needed for the processing job`,
 	Run: func(cmd *cobra.Command, args []string) {
+
+		// get driver config values
+		conf, err := config.ReadLocalConfigFile(configFile)
+		if err != nil {
+			logrus.WithField(
+				"File name", configFile,
+			).WithError(err).Error("Error reading config file")
+			return
+		}
+
+		// set logger
+		logrus.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
+
 		// set driver
 		jobID := uuid.New()
 		jobDriver, err := driver.NewDriver(jobID, conf)
@@ -147,6 +148,18 @@ var uploadCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
 
+		// get driver config values
+		conf, err := config.ReadLocalConfigFile(configFile)
+		if err != nil {
+			logrus.WithField(
+				"File name", configFile,
+			).WithError(err).Error("Error reading config file")
+			return
+		}
+
+		// set logger
+		logrus.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
+
 		// add job path info to driver
 		jobID, err := uuid.Parse(jobID)
 		if err != nil {
@@ -207,6 +220,18 @@ var runCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
 
+		// get driver config values
+		conf, err := config.ReadLocalConfigFile(configFile)
+		if err != nil {
+			logrus.WithField(
+				"File name", configFile,
+			).WithError(err).Error("Error reading config file")
+			return
+		}
+
+		// set logger
+		logrus.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
+
 		// add job path info to driver
 		jobID, err := uuid.Parse(jobID)
 		if err != nil {
@@ -265,6 +290,18 @@ var setCredsCmd = &cobra.Command{
 	Long:  `Set credentials for the job`,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
+
+		// get driver config values
+		conf, err := config.ReadLocalConfigFile(configFile)
+		if err != nil {
+			logrus.WithField(
+				"File name", configFile,
+			).WithError(err).Error("Error reading config file")
+			return
+		}
+
+		// set logger
+		logrus.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
 
 		// set driver
 		jobDriver, err := driver.NewSetupDriver(conf)
