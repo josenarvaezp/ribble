@@ -6,11 +6,14 @@ require (
 	github.com/aws/aws-lambda-go v1.27.1
 	github.com/aws/aws-sdk-go-v2 v1.13.0
 	github.com/aws/aws-sdk-go-v2/config v1.11.0
+	github.com/aws/aws-sdk-go-v2/credentials v1.6.4
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.7.4
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.14.0
+	github.com/aws/aws-sdk-go-v2/service/iam v1.16.0
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.12.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.21.0
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.13.1
+	github.com/aws/aws-sdk-go-v2/service/sts v1.11.1
 	github.com/google/uuid v1.3.0
 	github.com/kr/text v0.2.0 // indirect
 	github.com/sirupsen/logrus v1.8.1

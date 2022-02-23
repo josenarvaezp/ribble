@@ -58,7 +58,7 @@ type Coordinator struct {
 func NewCoordinator(
 	local bool,
 ) (*Coordinator, error) {
-	var cfg aws.Config
+	var cfg *aws.Config
 	var err error
 
 	// get region from env var
@@ -84,13 +84,13 @@ func NewCoordinator(
 	}
 
 	// create sqs client
-	coordinator.QueuesAPI = sqs.NewFromConfig(cfg)
+	coordinator.QueuesAPI = sqs.NewFromConfig(*cfg)
 
 	// create lambda client
-	coordinator.FaasAPI = lambda.NewFromConfig(cfg)
+	coordinator.FaasAPI = lambda.NewFromConfig(*cfg)
 
 	// Create an S3 client using the loaded configuration
-	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+	s3Client := s3.NewFromConfig(*cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
 	coordinator.UploaderAPI = manager.NewUploader(s3Client)

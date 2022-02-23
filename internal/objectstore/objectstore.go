@@ -19,11 +19,6 @@ type ObjectStoreAPI interface {
 		params *s3.CreateBucketInput,
 		optFns ...func(*s3.Options),
 	) (*s3.CreateBucketOutput, error)
-	PutBucketNotificationConfiguration(
-		ctx context.Context,
-		params *s3.PutBucketNotificationConfigurationInput,
-		optFns ...func(*s3.Options),
-	) (*s3.PutBucketNotificationConfigurationOutput, error)
 }
 
 // Object represent a cloud object

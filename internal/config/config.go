@@ -4,18 +4,62 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/josenarvaezp/displ/internal/objectstore"
+	"gopkg.in/yaml.v2"
 )
 
-// Sources:
-// - Setting credentials: https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/
+// Config represents the configuration file specified by the user
+type Config struct {
+	InputBuckets []*objectstore.Bucket `yaml:"input"`
+	OutputBucket string                `yaml:"output"`
+	Region       string                `yaml:"region"`
+	Local        bool                  `yaml:"local"`
+	LogLevel     int                   `yaml:"logLevel"`
+	AccountID    string                `yaml:"accountID"`
+	Username     string                `yaml:"username"`
+}
 
-func InitLocalCfg() (aws.Config, error) {
+// ReadLocalConfigFile reads the config file from the driver's file system
+// note that the path can be absolute or relative path
+func ReadLocalConfigFile(path string) (*Config, error) {
+	var conf Config
+
+	confFile, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	err = yaml.Unmarshal(confFile, &conf)
+	if err != nil {
+		return nil, err
+	}
+
+	return &conf, nil
+}
+
+// InitCfg initializes the configuration for the aws services that the driver
+// needs. Please note that the AWS credentials are taken from the
+// credentials file uner .aws placed in the home directory of the computer
+// runnin the driver
+func InitCfg(region string) (*aws.Config, error) {
+	cfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithRegion(region),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
+}
+
+func InitLocalCfg() (*aws.Config, error) {
 	localstackEndpointResolver := aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
 		return aws.Endpoint{
 			PartitionID:   "aws",
@@ -39,7 +83,7 @@ func InitLocalCfg() (aws.Config, error) {
 	if err != nil {
 		// TODO: log error
 		fmt.Println(err)
-		return aws.Config{}, err
+		return nil, err
 	}
 
 	// FIXME: insecure client for testing purposes
@@ -49,10 +93,10 @@ func InitLocalCfg() (aws.Config, error) {
 	httpClient := &http.Client{Transport: tr}
 	cfg.HTTPClient = httpClient
 
-	return cfg, nil
+	return &cfg, nil
 }
 
-func InitLocalLambdaCfg() (aws.Config, error) {
+func InitLocalLambdaCfg() (*aws.Config, error) {
 	localstackEndpointResolver := aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
 		return aws.Endpoint{
 			PartitionID:   "local", // TODO
@@ -76,7 +120,7 @@ func InitLocalLambdaCfg() (aws.Config, error) {
 	if err != nil {
 		// TODO: log error
 		fmt.Println(err)
-		return aws.Config{}, err
+		return nil, err
 	}
 
 	// FIXME: insecure client for testing purposes
@@ -86,25 +130,7 @@ func InitLocalLambdaCfg() (aws.Config, error) {
 	httpClient := &http.Client{Transport: tr}
 	cfg.HTTPClient = httpClient
 
-	return cfg, nil
-}
-
-// InitCfg initializes the configuration for the aws services that the driver
-// needs. Please note that the AWS credentials are taken from the
-// credentials file uner .aws placed in the home directory of the computer
-// runnin the driver
-func InitCfg(region string) (aws.Config, error) {
-	cfg, err := config.LoadDefaultConfig(
-		context.Background(),
-		config.WithRegion(region),
-	)
-	if err != nil {
-		// TODO: log error
-		fmt.Println(err)
-		return aws.Config{}, err
-	}
-
-	return cfg, nil
+	return &cfg, nil
 }
 
 func InitLocalS3Client() (*s3.Client, error) {
@@ -114,7 +140,7 @@ func InitLocalS3Client() (*s3.Client, error) {
 		return nil, err
 	}
 
-	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+	client := s3.NewFromConfig(*cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
 
@@ -128,5 +154,5 @@ func InitLocalLambdaClient() (*lambda.Client, error) {
 		return nil, err
 	}
 
-	return lambda.NewFromConfig(cfg), nil
+	return lambda.NewFromConfig(*cfg), nil
 }

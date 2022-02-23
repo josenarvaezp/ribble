@@ -75,7 +75,7 @@ type Mapper struct {
 func NewMapper(
 	local bool,
 ) (*Mapper, error) {
-	var cfg aws.Config
+	var cfg *aws.Config
 	var err error
 
 	// get region from env var
@@ -101,7 +101,7 @@ func NewMapper(
 	}
 
 	// Create an S3 client using the loaded configuration
-	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+	s3Client := s3.NewFromConfig(*cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
 
@@ -110,7 +110,7 @@ func NewMapper(
 	mapper.UploaderAPI = manager.NewUploader(s3Client)
 
 	// create sqs client
-	mapper.QueuesAPI = sqs.NewFromConfig(cfg)
+	mapper.QueuesAPI = sqs.NewFromConfig(*cfg)
 
 	return mapper, err
 }
