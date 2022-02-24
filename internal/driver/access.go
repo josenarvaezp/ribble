@@ -31,43 +31,36 @@ var (
 
 var (
 	// ribble role policy creation variables
-	ribblePolicy = `
-	{
+	ribblePolicy = `{
 		"Version": "2012-10-17",
 		"Statement": [
-		  {
-			"Effect": "Allow",
-			"Action": [
-				"s3:ListBucket",
-				"s3:PutObject",
-			 	"s3:GetObject"
-			],
-			"Resource": ["arn:aws:s3:::*"],
-			"Condition": {}
-		  },
-		  {
-			"Effect": "Allow",
-			"Action": "sqs:*",
-			"Resource": ["arn:aws:sqs:%[1]v::*"],
-			"Condition": {}
-		  },
-		  {
-			"Effect": "Allow",
-			"Action": "lambda:*",
-			"Resource": ["arn:aws:lambda:%[1]v::*"],
-			"Condition": {}
-		  }
+			{
+				"Effect": "Allow",
+				"Action": [
+					"s3:ListBucket","s3:PutObject","s3:GetObject"
+				],
+				"Resource": "arn:aws:s3::*:*"
+			},
+			{
+				"Effect": "Allow",
+				"Action": "sqs:*",
+				"Resource": "arn:aws:sqs::*:*"
+			},
+			{
+				"Effect": "Allow",
+				"Action": "lambda:*",
+				"Resource": "arn:aws:lambda::*:*"
+			}
 		]
-	}
-	`
+	}`
+
 	ribblePolicyName        = "ribblePolicy"
 	ribblePolicyDescription = "Policy for ribble jobs"
 )
 
 var (
 	// user policy to assume role variables
-	assumeRoleUserPolicy = `
-	{
+	assumeRoleUserPolicy = `{
 		"Version": "2012-10-17",
 		"Statement": [
 			{
@@ -76,8 +69,7 @@ var (
 				"Resource": "arn:aws:iam::%s:role/ribble"
 			}
 		]
-	}
-	`
+	}`
 	assumeRoleUserPolicyName        = "assumeRibblePolicy"
 	assumeRoleUserPolicyDescription = "Policy for users to assume ribble role"
 )
@@ -120,7 +112,6 @@ func (d *Driver) CreateRolePolicy(ctx context.Context) (*string, error) {
 	})
 	if err != nil {
 		if resourceNotExists(err) {
-			ribblePolicy := fmt.Sprintf(ribblePolicy, d.Config.Region)
 			output, err := d.IamAPI.CreatePolicy(ctx, &iam.CreatePolicyInput{
 				PolicyDocument: &ribblePolicy,
 				PolicyName:     &ribblePolicyName,
