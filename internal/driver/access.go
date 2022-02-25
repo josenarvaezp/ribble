@@ -36,9 +36,7 @@ var (
 		"Statement": [
 			{
 				"Effect": "Allow",
-				"Action": [
-					"s3:ListBucket","s3:PutObject","s3:GetObject"
-				],
+				"Action": "s3:*",
 				"Resource": "arn:aws:s3::*:*"
 			},
 			{
@@ -50,6 +48,11 @@ var (
 				"Effect": "Allow",
 				"Action": "lambda:*",
 				"Resource": "arn:aws:lambda::*:*"
+			},
+			{
+				"Effect": "Allow",
+				"Action": "ecr:*",
+				"Resource": "arn:aws:ecr::*:*"
 			}
 		]
 	}`
