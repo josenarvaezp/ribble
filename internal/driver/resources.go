@@ -30,7 +30,10 @@ func (d *Driver) CreateJobBucket(ctx context.Context) error {
 
 	_, err := d.ObjectStoreAPI.CreateBucket(ctx, params)
 	if err != nil {
-		return err
+		// only ingore already exists bucket error
+		if !bucketAlreadyExists(err) {
+			return err
+		}
 	}
 
 	return nil
@@ -141,28 +144,35 @@ func (d *Driver) StartCoordinator(ctx context.Context, numMappers int, numQueues
 		return err
 	}
 
-	// image name
-	imageName := fmt.Sprintf(
-		"%s:%s",
-		d.BuildData.CoordinatorData.ImageName,
-		d.BuildData.CoordinatorData.ImageTag,
+	// function arn
+	functionArn := fmt.Sprintf(
+		"arn:aws:lambda:%s:%s:function:%s_%s",
+		d.Config.Region,
+		d.Config.AccountID,
+		d.BuildData.CoordinatorData.Function,
+		d.JobID.String(),
 	)
 
 	// send the mapping split into lamda
-	result, _ := d.FaasAPI.Invoke(
+	_, err = d.FaasAPI.Invoke(
 		ctx,
 		&lambda.InvokeInput{
-			FunctionName:   aws.String(imageName),
+			FunctionName:   aws.String(functionArn),
 			Payload:        requestPayload,
 			InvocationType: lambdaTypes.InvocationTypeEvent,
 		},
 	)
+	return err
 
 	// error is ignored from asynch invokation and result only holds the status code
 	// check status code
-	if result.StatusCode != SUCCESS_CODE {
-		return errors.New("Error starting coordintator")
-	}
+	// if result.StatusCode != SUCCESS_CODE {
+	// 	return errors.New("Error starting coordintator")
+	// }
+}
 
-	return nil
+// bucketAlreadyExists checks if the s3 bucket being created already exists
+func bucketAlreadyExists(err error) bool {
+	var alreadyExists *s3Types.BucketAlreadyExists
+	return errors.As(err, &alreadyExists)
 }

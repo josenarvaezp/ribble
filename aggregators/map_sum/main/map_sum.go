@@ -24,9 +24,9 @@ func init() {
 	log.SetLevel(log.ErrorLevel)
 
 	var err error
-	r, err = lambdas.NewMapSumReducer(true)
+	r, err = lambdas.NewMapSumReducer(false)
 	if err != nil {
-		log.WithError(err).Fatal("Errorf starting mapper")
+		log.WithError(err).Fatal("Error starting mapper")
 		return
 	}
 }
@@ -71,6 +71,10 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 
 	// batch metadata - number of batches the reducer needs to process
 	totalBatchesToProcess, err := r.GetNumberOfBatchesToProcess(ctx)
+	if err != nil {
+		reducerLogger.WithError(err).Error("Error getting queue metadata")
+		return err
+	}
 	totalProcessedBatches := 0
 
 	// checkpoint info
@@ -93,6 +97,7 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 			lambdas.BatchIDAttribute,
 			lambdas.MessageIDAttribute,
 		},
+		WaitTimeSeconds: int32(5),
 	}
 
 	// recieve messages until we are done processing all queue

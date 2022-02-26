@@ -13,6 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/internal/aggregators"
 )
 
 var c *lambdas.Coordinator
@@ -22,7 +23,7 @@ func init() {
 	log.SetLevel(log.ErrorLevel)
 
 	var err error
-	c, err = lambdas.NewCoordinator(true)
+	c, err = lambdas.NewCoordinator(false)
 	if err != nil {
 		log.WithError(err).Fatal("Error starting coordinator")
 		return
@@ -98,7 +99,7 @@ ADD ./build/lambda_gen/{{.JobID}} ./build/lambda_gen/{{.JobID}}
 ADD ./{{.Workspace}} ./{{.Workspace}}
 
 # build lambdas
-RUN go build -ldflags "-s -w" -o /build/lambdas/ ./build/lambda_gen/{{.JobID}}/{{.FunctionType}}/{{.FunctionName}}.go
+RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/lambdas/ ./build/lambda_gen/{{.JobID}}/{{.FunctionType}}/{{.FunctionName}}.go
 
 # compress
 RUN upx --best --lzma /build/lambdas/{{.FunctionName}}
@@ -138,7 +139,7 @@ func init() {
 	log.SetLevel(log.ErrorLevel)
 
 	var err error
-	m, err = lambdas.NewMapper(true)
+	m, err = lambdas.NewMapper(false)
 	if err != nil {
 		log.WithError(err).Fatal("Error starting mapper")
 		return
@@ -154,7 +155,7 @@ func HandleRequest(ctx context.Context, request lambdas.MapperInput) error {
 	m.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
 	m.JobID = request.JobID
 	m.MapID = request.Mapping.MapID
-	m.NumQueues = request.Mapping.NumQueues
+	m.NumQueues = request.NumQueues
 
 	mapperLogger := log.WithFields(log.Fields{
 		"Job ID": m.JobID.String(),

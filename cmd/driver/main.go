@@ -203,9 +203,30 @@ var uploadCmd = &cobra.Command{
 		}
 
 		// create streams for job
-		err = jobDriver.CreateQueues(ctx, 5) // TODO: get num of queues
+		err = jobDriver.CreateQueues(ctx, 5 /*TODO: num queues*/)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating the job streams")
+			return
+		}
+
+		// create lambda mapper function
+		err = jobDriver.CreateMapperLambdaFunction(ctx)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error creating mapper lambda function")
+			return
+		}
+
+		// create lambda coordinator function
+		err = jobDriver.CreateCoordinatorLambdaFunction(ctx)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error creating coordinator lambda function")
+			return
+		}
+
+		// create lambda aggregator function
+		err = jobDriver.CreateAggregatorLambdaFunctions(ctx)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error creating aggreagots lambda functions")
 			return
 		}
 
@@ -274,7 +295,7 @@ var runCmd = &cobra.Command{
 		}
 
 		// start mappers
-		err = jobDriver.StartMappers(ctx, mappings)
+		err = jobDriver.StartMappers(ctx, mappings, 5 /*TODO: num queues*/)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error starting the mappers")
 			return

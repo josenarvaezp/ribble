@@ -18,13 +18,13 @@ ADD ./internal ./internal
 ADD ./aggregators ./aggregators
 
 # build lambdas
-RUN go build -ldflags "-s -w" -o /build/map_sum ./aggregators/map_sum/main/map_sum.go 
+RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_sum ./aggregators/map_sum/main/map_sum.go 
 
 # compress
 RUN upx --best --lzma /build/map_sum
 
 # Build runtime for map sum aggregator
-FROM scratch as map_sum
+FROM alpine as map_sum
 
 COPY --from=build /build/map_sum /map_sum
 

@@ -28,10 +28,9 @@ import (
 // for the Mapping stage of the framework. Each mapper recieves an
 // input which may contain one or multiple objects, depeding on their size.
 type Mapping struct {
-	MapID     uuid.UUID                 `json:"id"`
-	Objects   []objectstore.ObjectRange `json:"rangeObjects"`
-	Size      int64                     `json:"size"`
-	NumQueues int64                     `json:"queues"`
+	MapID   uuid.UUID                 `json:"id"`
+	Objects []objectstore.ObjectRange `json:"rangeObjects"`
+	Size    int64                     `json:"size,string"`
 }
 
 // NewMapping initialises the M with an id and size 0
@@ -44,8 +43,9 @@ func NewMapping() *Mapping {
 
 // MapperInput is the input the mapper lambda receives
 type MapperInput struct {
-	JobID   uuid.UUID `json:"jobID"`
-	Mapping Mapping   `json:"mapping"`
+	JobID     uuid.UUID `json:"jobID"`
+	Mapping   Mapping   `json:"mapping"`
+	NumQueues int64     `json:"queues,string"`
 }
 
 // MapperAPI is an interface deining the functions available to the mapper
@@ -311,7 +311,7 @@ func (m *Mapper) SendFinishedEvent(ctx context.Context) error {
 // QueueMetadata is used to send events to the metadata queues
 // about how many batches a map processed
 type QueueMetadata struct {
-	MapID      string `json:"jobID"`
+	MapID      string `json:"mapID"`
 	NumBatches int    `json:"numBatches"`
 }
 
@@ -320,7 +320,7 @@ type QueueMetadata struct {
 // writing out the output
 func (m *Mapper) SendBatchMetadata(ctx context.Context, batchMetadata map[int]int64) error {
 	meta := &QueueMetadata{
-		MapID: m.MapID.String(),
+		MapID: m.MapID.String(), // TODO
 	}
 
 	// loop through the queues

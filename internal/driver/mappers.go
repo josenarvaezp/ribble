@@ -3,7 +3,6 @@ package driver
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -55,9 +54,13 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context) ([]*lambda
 
 		for moreObjects {
 			params := &s3.ListObjectsV2Input{
-				Bucket:            &bucket.Name,
-				MaxKeys:           1000,
-				ContinuationToken: continuationToken,
+				Bucket:  &bucket.Name,
+				MaxKeys: 1000,
+			}
+
+			// add continuation token
+			if continuationToken != nil {
+				params.ContinuationToken = continuationToken
 			}
 
 			listObjectsOuput, err := d.ObjectStoreAPI.ListObjectsV2(ctx, params)
@@ -123,19 +126,22 @@ func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMappin
 }
 
 // StartMappers sends the each split into lambda
-func (d *Driver) StartMappers(ctx context.Context, mappings []*lambdas.Mapping) error {
-	// image name
-	imageName := fmt.Sprintf(
-		"%s:%s",
-		d.BuildData.MapperData.ImageName,
-		d.BuildData.MapperData.ImageTag,
+func (d *Driver) StartMappers(ctx context.Context, mappings []*lambdas.Mapping, numQueues int64) error {
+	// function arn
+	functionArn := fmt.Sprintf(
+		"arn:aws:lambda:%s:%s:function:%s_%s",
+		d.Config.Region,
+		d.Config.AccountID,
+		d.BuildData.MapperData.Function,
+		d.JobID.String(),
 	)
 
 	for _, currentMapping := range mappings {
 		// create payload describing split
 		input := &lambdas.MapperInput{
-			JobID:   d.JobID,
-			Mapping: *currentMapping,
+			JobID:     d.JobID,
+			Mapping:   *currentMapping,
+			NumQueues: numQueues,
 		}
 
 		requestPayload, err := json.Marshal(input)
@@ -144,21 +150,24 @@ func (d *Driver) StartMappers(ctx context.Context, mappings []*lambdas.Mapping) 
 		}
 
 		// send the mapping split into lamda
-		result, _ := d.FaasAPI.Invoke(
+		_, err = d.FaasAPI.Invoke(
 			ctx,
 			&lambda.InvokeInput{
-				FunctionName:   aws.String(imageName),
+				FunctionName:   aws.String(functionArn),
 				Payload:        requestPayload,
 				InvocationType: types.InvocationTypeEvent,
 			},
 		)
+		if err != nil {
+			return err
+		}
 
 		// error is ignored from asynch invokation and result only holds the status code
 		// check status code
-		if result.StatusCode != SUCCESS_CODE {
-			// TODO: stop execution and inform the user about the errors
-			return errors.New("Error starting mappers")
-		}
+		// if result.StatusCode != SUCCESS_CODE {
+		// 	// TODO: stop execution and inform the user about the errors
+		// 	return errors.New("Error starting mappers")
+		// }
 	}
 
 	return nil

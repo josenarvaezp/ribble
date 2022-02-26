@@ -32,8 +32,8 @@ type Object struct {
 type ObjectRange struct {
 	Bucket      string `json:"objectBucket"`
 	Key         string `json:"objectKey"`
-	InitialByte int64  `json:"initialByte"`
-	FinalByte   int64  `json:"finalByte"`
+	InitialByte int64  `json:"initialByte,string"`
+	FinalByte   int64  `json:"finalByte,string"`
 }
 
 // Bucket represents a cloud bucket

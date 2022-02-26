@@ -106,6 +106,7 @@ func (r *Reducer) GetNumberOfBatchesToProcess(ctx context.Context) (*int, error)
 	params := &sqs.ReceiveMessageInput{
 		QueueUrl:            &queueURL,
 		MaxNumberOfMessages: MaxItemsPerBatch,
+		WaitTimeSeconds:     5,
 	}
 
 	// dedupeMap is used to check if we have processed a message already
@@ -260,11 +261,16 @@ func (r *Reducer) GetCheckpointData(ctx context.Context) (*CheckpointData, error
 
 	for moreObjects {
 		params := &s3.ListObjectsV2Input{
-			Bucket:            &bucket,
-			MaxKeys:           1000,
-			ContinuationToken: continuationToken,
-			Prefix:            &prefixKey,
+			Bucket:  &bucket,
+			MaxKeys: 1000,
+			Prefix:  &prefixKey,
 		}
+
+		// add continuation token
+		if continuationToken != nil {
+			params.ContinuationToken = continuationToken
+		}
+
 		listObjectsOuput, err := r.ObjectStoreAPI.ListObjectsV2(ctx, params)
 		if err != nil {
 			return nil, err

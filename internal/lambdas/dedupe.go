@@ -18,7 +18,12 @@ func InitDedupe() *Dedupe {
 
 // InitDedupeBatch initializes the read map for the current map and batch
 func (d *Dedupe) InitDedupeBatch(mapID string, batchID int, messageID int) {
-	d.WriteMap[mapID] = make(map[int]*DedupeProcessedMessages)
+	// if map doesn't exist for current map id init
+	if _, ok := d.WriteMap[mapID]; !ok {
+		d.WriteMap[mapID] = make(map[int]*DedupeProcessedMessages)
+	}
+
+	// update batch map
 	d.WriteMap[mapID][batchID] = &DedupeProcessedMessages{
 		ProcessedCount: 1,
 		Processed:      map[int]bool{messageID: true},

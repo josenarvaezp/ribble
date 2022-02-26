@@ -17,7 +17,10 @@ var (
 			{
 				"Effect": "Allow",
 				"Principal": {
-					"AWS": "arn:aws:iam::%s:user/%s"
+					"AWS": "arn:aws:iam::%s:user/%s",
+					"Service": [
+						"lambda.amazonaws.com"
+					]
 				},
 				"Action": "sts:AssumeRole",
 				"Condition": {}
@@ -51,7 +54,7 @@ var (
 			},
 			{
 				"Effect": "Allow",
-				"Action": "ecr:*",
+				"Action": "ecr:CreateRepository",
 				"Resource": "arn:aws:ecr::*:*"
 			}
 		]

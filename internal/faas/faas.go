@@ -18,4 +18,24 @@ type FaasAPI interface {
 		params *lambda.AddPermissionInput,
 		optFns ...func(*lambda.Options),
 	) (*lambda.AddPermissionOutput, error)
+	CreateFunction(
+		ctx context.Context,
+		params *lambda.CreateFunctionInput,
+		optFns ...func(*lambda.Options),
+	) (*lambda.CreateFunctionOutput, error)
+	PutFunctionConcurrency(
+		ctx context.Context,
+		params *lambda.PutFunctionConcurrencyInput,
+		optFns ...func(*lambda.Options),
+	) (*lambda.PutFunctionConcurrencyOutput, error)
+	PutFunctionEventInvokeConfig(
+		ctx context.Context,
+		params *lambda.PutFunctionEventInvokeConfigInput,
+		optFns ...func(*lambda.Options),
+	) (*lambda.PutFunctionEventInvokeConfigOutput, error)
+	PutProvisionedConcurrencyConfig(
+		ctx context.Context,
+		params *lambda.PutProvisionedConcurrencyConfigInput,
+		optFns ...func(*lambda.Options),
+	) (*lambda.PutProvisionedConcurrencyConfigOutput, error)
 }
