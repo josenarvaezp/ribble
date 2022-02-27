@@ -50,8 +50,5 @@ awslocal s3api get-object --bucket jobbucket --key output/feff263f-9da5-4ad9-af6
 awslocal s3 cp ./config.yaml s3://09cd3797-1b53-4c61-b24f-b454bbec73a7/config.yaml
 
 
-13330aa9-d31a-4638-b870-9fb8f8e562cd
-417c2069-191f-40a9-b71d-4327a4d3deb3
-63d6683a-67f5-449e-9157-b7dda0f77a2f
-b8fd0b46-4ed5-41d7-8f4c-3b3fdb22eb63
- feff263f-9da5-4ad9-af60-e2edf5292828
+Reqs:
+AWS account needs to have AdministratorAccess  or make sure the current user has permission to assume role: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_permissions-to-switch.html

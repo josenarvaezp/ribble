@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
+	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -68,6 +70,23 @@ type Reducer struct {
 	mu             sync.Mutex
 }
 
+// UpdateReducerWithRequest updates the reducer struct with the information
+// gathered from the context and request
+func (r *Reducer) UpdateReducerWithRequest(ctx context.Context, request ReducerInput) error {
+	// get data from context
+	lc, ok := lambdacontext.FromContext(ctx)
+	if !ok {
+		return errors.New("Error getting lambda context")
+	}
+	r.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
+	r.ReducerID = request.ReducerID
+	r.JobID = request.JobID
+	r.NumMappers = request.NumMappers
+	r.QueuePartition = request.QueuePartition
+
+	return nil
+}
+
 // WriteReducerOutput writes the output of the reducer to objectstore
 func (r *Reducer) WriteReducerOutput(ctx context.Context, output aggregators.Aggregator, key string) error {
 	// encode map to JSON
@@ -106,6 +125,7 @@ func (r *Reducer) GetNumberOfBatchesToProcess(ctx context.Context) (*int, error)
 	params := &sqs.ReceiveMessageInput{
 		QueueUrl:            &queueURL,
 		MaxNumberOfMessages: MaxItemsPerBatch,
+		WaitTimeSeconds:     5,
 	}
 
 	// dedupeMap is used to check if we have processed a message already
@@ -241,7 +261,7 @@ type CheckpointData struct {
 // GetCheckpointData gets all the checkpoint objects for the reducer and
 // returns a CheckpointData struct which holds data about the intermediate and
 // dedupe objects
-func (r *Reducer) GetCheckpointData(ctx context.Context) (*CheckpointData, error) {
+func (r *Reducer) GetCheckpointData(ctx context.Context, wg *sync.WaitGroup) (*CheckpointData, error) {
 	// used to split objects
 	checkpointData := &CheckpointData{
 		LastCheckpoint:         0,
@@ -260,11 +280,16 @@ func (r *Reducer) GetCheckpointData(ctx context.Context) (*CheckpointData, error
 
 	for moreObjects {
 		params := &s3.ListObjectsV2Input{
-			Bucket:            &bucket,
-			MaxKeys:           1000,
-			ContinuationToken: continuationToken,
-			Prefix:            &prefixKey,
+			Bucket:  &bucket,
+			MaxKeys: 1000,
+			Prefix:  &prefixKey,
 		}
+
+		// add continuation token
+		if continuationToken != nil {
+			params.ContinuationToken = continuationToken
+		}
+
 		listObjectsOuput, err := r.ObjectStoreAPI.ListObjectsV2(ctx, params)
 		if err != nil {
 			return nil, err
@@ -288,6 +313,14 @@ func (r *Reducer) GetCheckpointData(ctx context.Context) (*CheckpointData, error
 
 		// check if there are more objects remaining
 		moreObjects = listObjectsOuput.IsTruncated
+	}
+
+	// get output map and dedupe info from checkpoints
+	if len(checkpointData.IntermediateOutputData) != 0 {
+		r.GetOutputMap(ctx, checkpointData.IntermediateOutputData, wg)
+		r.GetDedupe(ctx, checkpointData.DedupeData, wg)
+
+		wg.Wait()
 	}
 
 	return checkpointData, nil

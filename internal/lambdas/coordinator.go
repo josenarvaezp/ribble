@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -58,7 +60,7 @@ type Coordinator struct {
 func NewCoordinator(
 	local bool,
 ) (*Coordinator, error) {
-	var cfg aws.Config
+	var cfg *aws.Config
 	var err error
 
 	// get region from env var
@@ -84,18 +86,34 @@ func NewCoordinator(
 	}
 
 	// create sqs client
-	coordinator.QueuesAPI = sqs.NewFromConfig(cfg)
+	coordinator.QueuesAPI = sqs.NewFromConfig(*cfg)
 
 	// create lambda client
-	coordinator.FaasAPI = lambda.NewFromConfig(cfg)
+	coordinator.FaasAPI = lambda.NewFromConfig(*cfg)
 
 	// Create an S3 client using the loaded configuration
-	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+	s3Client := s3.NewFromConfig(*cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
 	coordinator.UploaderAPI = manager.NewUploader(s3Client)
 
 	return coordinator, err
+}
+
+// UpdateCoordinatorWithRequest updates the coordinator struct with the information
+// gathered from the context and request
+func (c *Coordinator) UpdateCoordinatorWithRequest(ctx context.Context, request CoordinatorInput) error {
+	// get data from context
+	lc, ok := lambdacontext.FromContext(ctx)
+	if !ok {
+		return errors.New("Error getting lambda context")
+	}
+	c.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
+	c.JobID = request.JobID
+	c.NumMappers = int64(request.NumMappers)
+	c.NumQueues = int64(request.NumQueues)
+
+	return nil
 }
 
 // AreMappersDone reads events from the mapper-done queue to check
@@ -138,6 +156,14 @@ func (c *Coordinator) AreMappersDone(ctx context.Context) error {
 // InvokeReducers is used to invoke the reducers once all mappers are done
 // there is one reducer per queue invoked
 func (c *Coordinator) InvokeReducers(ctx context.Context, reducerName string) error {
+	// function arn
+	functionArn := fmt.Sprintf(
+		"arn:aws:lambda:%s:%s:function:%s",
+		c.Region,
+		c.AccountID,
+		reducerName,
+	)
+
 	// invoke a reducer per each queue
 	for i := 0; i < int(c.NumQueues); i++ {
 		// encode reducer input to json
@@ -152,14 +178,17 @@ func (c *Coordinator) InvokeReducers(ctx context.Context, reducerName string) er
 			return err
 		}
 
-		result, _ := c.FaasAPI.Invoke(
+		result, err := c.FaasAPI.Invoke(
 			ctx,
 			&lambda.InvokeInput{
-				FunctionName:   aws.String(reducerName),
+				FunctionName:   aws.String(functionArn),
 				Payload:        requestPayload,
 				InvocationType: types.InvocationTypeEvent,
 			},
 		)
+		if err != nil {
+			return err
+		}
 
 		// error is ignored from asynch invokation and result only holds the status code
 		// check status code

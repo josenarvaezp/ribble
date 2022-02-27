@@ -15,7 +15,7 @@ import (
 func NewMapSumReducer(
 	local bool,
 ) (*Reducer, error) {
-	var cfg aws.Config
+	var cfg *aws.Config
 	var err error
 
 	// get region from env var
@@ -43,7 +43,7 @@ func NewMapSumReducer(
 	}
 
 	// Create an S3 client using the loaded configuration
-	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+	s3Client := s3.NewFromConfig(*cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
 	reducer.ObjectStoreAPI = s3Client
@@ -53,7 +53,7 @@ func NewMapSumReducer(
 	reducer.UploaderAPI = manager.NewUploader(s3Client)
 
 	// create sqs client
-	reducer.QueuesAPI = sqs.NewFromConfig(cfg)
+	reducer.QueuesAPI = sqs.NewFromConfig(*cfg)
 
 	return reducer, err
 }

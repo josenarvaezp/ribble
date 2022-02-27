@@ -11,7 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
+	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -19,16 +21,33 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/config"
-	"github.com/josenarvaezp/displ/internal/driver"
 	"github.com/josenarvaezp/displ/internal/objectstore"
 	"github.com/josenarvaezp/displ/internal/queues"
 	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
+// Mapping represents the collection of objects that are used as input
+// for the Mapping stage of the framework. Each mapper recieves an
+// input which may contain one or multiple objects, depeding on their size.
+type Mapping struct {
+	MapID   uuid.UUID                 `json:"id"`
+	Objects []objectstore.ObjectRange `json:"rangeObjects"`
+	Size    int64                     `json:"size,string"`
+}
+
+// NewMapping initialises the M with an id and size 0
+func NewMapping() *Mapping {
+	return &Mapping{
+		MapID: uuid.New(),
+		Size:  0,
+	}
+}
+
 // MapperInput is the input the mapper lambda receives
 type MapperInput struct {
-	JobID   uuid.UUID      `json:"jobID"`
-	Mapping driver.Mapping `json:"mapping"`
+	JobID     uuid.UUID `json:"jobID"`
+	Mapping   Mapping   `json:"mapping"`
+	NumQueues int64     `json:"queues,string"`
 }
 
 // MapperAPI is an interface deining the functions available to the mapper
@@ -58,7 +77,7 @@ type Mapper struct {
 func NewMapper(
 	local bool,
 ) (*Mapper, error) {
-	var cfg aws.Config
+	var cfg *aws.Config
 	var err error
 
 	// get region from env var
@@ -84,7 +103,7 @@ func NewMapper(
 	}
 
 	// Create an S3 client using the loaded configuration
-	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+	s3Client := s3.NewFromConfig(*cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
 
@@ -93,9 +112,25 @@ func NewMapper(
 	mapper.UploaderAPI = manager.NewUploader(s3Client)
 
 	// create sqs client
-	mapper.QueuesAPI = sqs.NewFromConfig(cfg)
+	mapper.QueuesAPI = sqs.NewFromConfig(*cfg)
 
 	return mapper, err
+}
+
+// UpdateMapperWithRequest updates the mapper struct with the information
+// gathered from the context and request
+func (m *Mapper) UpdateMapperWithRequest(ctx context.Context, request MapperInput) error {
+	// get data from context
+	lc, ok := lambdacontext.FromContext(ctx)
+	if !ok {
+		return errors.New("Error getting lambda context")
+	}
+	m.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
+	m.JobID = request.JobID
+	m.MapID = request.Mapping.MapID
+	m.NumQueues = request.NumQueues
+
+	return nil
 }
 
 // DownloadFile downloads a file from the object store into the local filesystem
@@ -294,7 +329,7 @@ func (m *Mapper) SendFinishedEvent(ctx context.Context) error {
 // QueueMetadata is used to send events to the metadata queues
 // about how many batches a map processed
 type QueueMetadata struct {
-	MapID      string `json:"jobID"`
+	MapID      string `json:"mapID"`
 	NumBatches int    `json:"numBatches"`
 }
 
@@ -303,7 +338,7 @@ type QueueMetadata struct {
 // writing out the output
 func (m *Mapper) SendBatchMetadata(ctx context.Context, batchMetadata map[int]int64) error {
 	meta := &QueueMetadata{
-		MapID: m.MapID.String(),
+		MapID: m.MapID.String(), // TODO
 	}
 
 	// loop through the queues
@@ -340,4 +375,8 @@ func (m *Mapper) SendBatchMetadata(ctx context.Context, batchMetadata map[int]in
 	}
 
 	return nil
+}
+
+func RunMapSumMapper(filename string, userMap func(filename string) aggregators.MapSum) aggregators.MapSum {
+	return userMap(filename)
 }

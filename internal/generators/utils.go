@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	internalMapSumAggregator = "lambdas.ECRAggregatorMapSum"
+	internalMapSumAggregator = "aggregators.Aggregators[0]"
 )
 
 // AggregatorTypeToInternalFunction returns the string name of the

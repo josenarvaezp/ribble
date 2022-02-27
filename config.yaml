@@ -3,6 +3,7 @@ input:
   - bucket: mysecondbucket
 output: mybucketoutput
 region: eu-west-2
-mapperFuncName: mymapper
+accountID: 000000000000
+username: josenarvaez
+logLevel: 1
 local: true
-logLevel: 3

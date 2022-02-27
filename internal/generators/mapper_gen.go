@@ -2,6 +2,7 @@ package generators
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"runtime"
 	"strings"
@@ -19,14 +20,19 @@ var (
 
 // FunctionData defines the data needed for the template
 type FunctionData struct {
-	PackagePath string
-	PackageName string
-	Function    string
+	PackagePath   string `yaml:"PackagePath,omitempty"`
+	PackageName   string `yaml:"PackageName,omitempty"`
+	GeneratedFile string `yaml:"GeneratedFile,omitempty"`
+	Function      string `yaml:"Function,omitempty"`
+	ImageName     string `yaml:"ImageName,omitempty"`
+	ImageTag      string `yaml:"ImageTag,omitempty"`
+	Dockefile     string `yaml:"Dockerfile,omitempty"`
+	Aggregator    string `yaml:"Aggregator,omitempty"`
 }
 
 // GetFunctionData gets as input an interface that should be a function
 // and gets the function's package information and the function name
-func GetFunctionData(i interface{}) FunctionData {
+func GetFunctionData(i interface{}, jobID string) *FunctionData {
 	fullName := runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 	lenFullName := len(fullName)
 
@@ -39,10 +45,23 @@ func GetFunctionData(i interface{}) FunctionData {
 	packageFullName := fullName[0:indexOfLastSlash+1] + packageName
 	functionName := fullName[indexOfSecondLastDot+1 : lenFullName]
 
-	return FunctionData{
+	return &FunctionData{
 		PackagePath: packageFullName,
 		PackageName: packageName,
-		Function:    functionName,
+		GeneratedFile: fmt.Sprintf("%s/%s/%s/%s.go",
+			GeneratedFilesDir,
+			jobID,
+			functionName,
+			functionName,
+		),
+		Function:  functionName,
+		ImageName: fmt.Sprintf("%s_%s", strings.ToLower(functionName), jobID),
+		ImageTag:  "latest",
+		Dockefile: fmt.Sprintf("%s/%s/dockerfiles/Dockerfile.%s",
+			GeneratedFilesDir,
+			jobID,
+			functionName,
+		),
 	}
 }
 
@@ -89,7 +108,7 @@ func ValidateMapper(mapper interface{}) (lambdas.AggregatorType, error) {
 func ExecuteMapperGenerator(
 	jobID string,
 	aggregatorType lambdas.AggregatorType,
-	functionData FunctionData,
+	functionData *FunctionData,
 ) error {
 	switch aggregatorType {
 	case lambdas.MapSumAggregator:

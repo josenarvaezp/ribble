@@ -6,28 +6,15 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/josenarvaezp/displ/internal/generators"
 	"github.com/josenarvaezp/displ/internal/utils"
-)
-
-const (
-	// name of directories and flags for binary
-	pathToRoot                    = "."
-	binaryNameToBuildJob          = "gen_job"
-	workspaceFlag                 = "--workspace"
-	jobIdFlag                     = "--job-id"
-	scriptToGenerateGoFiles       = "./build/generate_lambda_files.sh"
-	scriptToBuildImages           = "./build/build_dockerfiles.sh"
-	scriptToBuildAggregatorImages = "./build/build_aggregators.sh"
-	GeneratedFilesDir             = "./build/lambda_gen"
-	AggregatorDockerfiles         = "./build/aggregators"
 )
 
 // BuildJobGenerationBinary generates a binary file that is used to generate
 // the go files and dockerfiles needed to run the job
 func (d *Driver) BuildJobGenerationBinary() error {
-	_, err := exec.Command(scriptToGenerateGoFiles, d.JobID.String(), d.JobPath).Output()
+	_, err := exec.Command(generators.ScriptToGenerateGoFiles, d.BuildData.BuildDir, d.BuildData.JobPath).Output()
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -38,18 +25,17 @@ func (d *Driver) BuildJobGenerationBinary() error {
 // and creates go files and dockerfiles required for the job
 func (d *Driver) GenerateResourcesFromBinary() error {
 	jobBinaryName := fmt.Sprintf( // ./build/lambda_gen/JOB_ID/gen_job
-		"%s/%s/%s",
-		GeneratedFilesDir,
-		d.JobID.String(),
-		binaryNameToBuildJob,
+		"%s/%s",
+		d.BuildData.BuildDir,
+		generators.BinaryNameToBuildJob,
 	)
-	workspaceSplit := strings.SplitAfterN(d.JobPath, "/", 3)
-	workspace := workspaceSplit[1][0 : len(workspaceSplit[1])-1]
+	workspaceSplit := strings.SplitAfterN(d.BuildData.JobPath, "/", 3)
+	workspaceRoot := workspaceSplit[1][0 : len(workspaceSplit[1])-1]
 	_, err := exec.Command(
 		jobBinaryName,
-		workspaceFlag,
-		workspace,
-		jobIdFlag,
+		generators.WorkspaceFlag,
+		workspaceRoot,
+		generators.JobIdFlag,
 		d.JobID.String(),
 	).Output()
 	if err != nil {
@@ -60,7 +46,7 @@ func (d *Driver) GenerateResourcesFromBinary() error {
 }
 
 func (d *Driver) BuildAggregatorImages() error {
-	_, err := exec.Command(scriptToBuildAggregatorImages).Output()
+	_, err := exec.Command(generators.ScriptToBuildAggregatorImages).Output()
 	if err != nil {
 		return err
 	}
@@ -74,7 +60,7 @@ func (d *Driver) BuildDockerCustomImages() error {
 	// build docker files
 	dockefilesDir := fmt.Sprintf( // ./build/lambda_gen/JOB_ID/dockerfiles
 		"%s/%s/dockerfiles",
-		GeneratedFilesDir,
+		generators.GeneratedFilesDir,
 		d.JobID.String(),
 	)
 	err := buildDockerfile(dockefilesDir, d.JobID)
@@ -97,7 +83,7 @@ func buildDockerfile(directory string, JobID uuid.UUID) error {
 		imageName := strings.SplitAfter(file.Name(), "Dockerfile.")[1]
 		tagName := fmt.Sprintf("%s_%s", strings.ToLower(imageName), JobID.String())
 		_, err := exec.Command(
-			scriptToBuildImages,
+			generators.ScriptToBuildImages,
 			tagName,
 			JobID.String(),
 			imageName,
