@@ -117,11 +117,6 @@ func (d *Driver) UploadJobImages(ctx context.Context) error {
 		return err
 	}
 
-	err = d.UploadAggregators(ctx)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

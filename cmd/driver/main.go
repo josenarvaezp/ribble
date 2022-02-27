@@ -29,6 +29,7 @@ func main() {
 	rootCmd.AddCommand(uploadCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(setCredsCmd)
+	rootCmd.AddCommand(setupCmd)
 
 	setCredsCmd.PersistentFlags().StringVar(&accountID, "account-id", "", "AWS account id")
 	setCredsCmd.PersistentFlags().StringVar(&username, "username", "", "AWS username")
@@ -36,6 +37,9 @@ func main() {
 	setCredsCmd.MarkFlagRequired("account-id")
 	setCredsCmd.MarkFlagRequired("username")
 	setCredsCmd.MarkPersistentFlagRequired("config")
+
+	setupCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
+	setupCmd.MarkPersistentFlagRequired("config")
 
 	buildCmd.PersistentFlags().StringVar(&jobPath, "job", "", "path to go file defining job")
 	buildCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
@@ -223,13 +227,6 @@ var uploadCmd = &cobra.Command{
 			return
 		}
 
-		// create lambda aggregator function
-		err = jobDriver.CreateAggregatorLambdaFunctions(ctx)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error creating aggreagots lambda functions")
-			return
-		}
-
 		fmt.Println("Upload successful with Job ID: ", jobDriver.JobID)
 	},
 }
@@ -377,5 +374,58 @@ var setCredsCmd = &cobra.Command{
 		}
 
 		fmt.Println("IAM resources created succesfully")
+	},
+}
+
+var setupCmd = &cobra.Command{
+	Use:   "setup",
+	Short: "Sets up common resources needed for every ribble job",
+	Long:  `Sets up common resources needed for every ribble job`,
+	Run: func(cmd *cobra.Command, args []string) {
+		ctx := context.Background()
+
+		// get driver config values
+		conf, err := config.ReadLocalConfigFile(configFile)
+		if err != nil {
+			logrus.WithField(
+				"File name", configFile,
+			).WithError(err).Error("Error reading config file")
+			return
+		}
+
+		// set logger
+		logrus.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
+
+		// add job path info to driver
+		jobID, err := uuid.Parse(jobID)
+		if err != nil {
+			logrus.WithError(err).Error("Error parsing ID, it must be an uuid")
+			return
+		}
+
+		// set driver
+		jobDriver, err := driver.NewDriver(jobID, conf)
+		if err != nil {
+			logrus.WithError(err).Error("Error initializing driver")
+			return
+		}
+		jobDriver.JobID = jobID
+
+		driverLogger := logrus.WithFields(logrus.Fields{
+			"Job ID": jobID.String(),
+		})
+
+		err = jobDriver.UploadAggregators(ctx)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error uploading aggregator images")
+			return
+		}
+
+		// create lambda aggregator function
+		err = jobDriver.CreateAggregatorLambdaFunctions(ctx)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error creating aggreagots lambda functions")
+			return
+		}
 	},
 }
