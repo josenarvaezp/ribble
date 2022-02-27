@@ -11,7 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
+	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -113,6 +115,22 @@ func NewMapper(
 	mapper.QueuesAPI = sqs.NewFromConfig(*cfg)
 
 	return mapper, err
+}
+
+// UpdateMapperWithRequest updates the mapper struct with the information
+// gathered from the context and request
+func (m *Mapper) UpdateMapperWithRequest(ctx context.Context, request MapperInput) error {
+	// get data from context
+	lc, ok := lambdacontext.FromContext(ctx)
+	if !ok {
+		return errors.New("Error getting lambda context")
+	}
+	m.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
+	m.JobID = request.JobID
+	m.MapID = request.Mapping.MapID
+	m.NumQueues = request.NumQueues
+
+	return nil
 }
 
 // DownloadFile downloads a file from the object store into the local filesystem
@@ -357,4 +375,8 @@ func (m *Mapper) SendBatchMetadata(ctx context.Context, batchMetadata map[int]in
 	}
 
 	return nil
+}
+
+func RunMapSumMapper(filename string, userMap func(filename string) aggregators.MapSum) aggregators.MapSum {
+	return userMap(filename)
 }

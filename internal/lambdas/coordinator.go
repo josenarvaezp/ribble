@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -96,6 +98,22 @@ func NewCoordinator(
 	coordinator.UploaderAPI = manager.NewUploader(s3Client)
 
 	return coordinator, err
+}
+
+// UpdateCoordinatorWithRequest updates the coordinator struct with the information
+// gathered from the context and request
+func (c *Coordinator) UpdateCoordinatorWithRequest(ctx context.Context, request CoordinatorInput) error {
+	// get data from context
+	lc, ok := lambdacontext.FromContext(ctx)
+	if !ok {
+		return errors.New("Error getting lambda context")
+	}
+	c.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
+	c.JobID = request.JobID
+	c.NumMappers = int64(request.NumMappers)
+	c.NumQueues = int64(request.NumQueues)
+
+	return nil
 }
 
 // AreMappersDone reads events from the mapper-done queue to check
