@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 
 	"github.com/google/uuid"
@@ -206,13 +207,6 @@ var uploadCmd = &cobra.Command{
 			return
 		}
 
-		// create streams for job
-		err = jobDriver.CreateQueues(ctx, 5 /*TODO: num queues*/)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error creating the job streams")
-			return
-		}
-
 		// create lambda mapper function
 		err = jobDriver.CreateMapperLambdaFunction(ctx)
 		if err != nil {
@@ -284,15 +278,25 @@ var runCmd = &cobra.Command{
 			return
 		}
 
+		numMappings := len(mappings)
+		numReducers := int(math.Ceil(float64(numMappings) / 2))
+
+		// create streams for job
+		err = jobDriver.CreateQueues(ctx, numReducers)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error creating the job streams")
+			return
+		}
+
 		// start coordinator
-		err = jobDriver.StartCoordinator(ctx, len(mappings), 5 /*TODO: num queues*/)
+		err = jobDriver.StartCoordinator(ctx, numMappings, numReducers)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error starting the coordinator")
 			return
 		}
 
 		// start mappers
-		err = jobDriver.StartMappers(ctx, mappings, 5 /*TODO: num queues*/)
+		err = jobDriver.StartMappers(ctx, mappings, numReducers)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error starting the mappers")
 			return
