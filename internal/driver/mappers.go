@@ -126,7 +126,7 @@ func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMappin
 }
 
 // StartMappers sends the each split into lambda
-func (d *Driver) StartMappers(ctx context.Context, mappings []*lambdas.Mapping, numQueues int64) error {
+func (d *Driver) StartMappers(ctx context.Context, mappings []*lambdas.Mapping, numQueues int) error {
 	// function arn
 	functionArn := fmt.Sprintf(
 		"arn:aws:lambda:%s:%s:function:%s_%s",
@@ -141,7 +141,7 @@ func (d *Driver) StartMappers(ctx context.Context, mappings []*lambdas.Mapping, 
 		input := &lambdas.MapperInput{
 			JobID:     d.JobID,
 			Mapping:   *currentMapping,
-			NumQueues: numQueues,
+			NumQueues: int64(numQueues),
 		}
 
 		requestPayload, err := json.Marshal(input)
