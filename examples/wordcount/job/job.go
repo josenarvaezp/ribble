@@ -2,11 +2,12 @@ package main
 
 import (
 	"github.com/josenarvaezp/displ/examples/wordcount"
-	"github.com/josenarvaezp/displ/pkg/generators"
+	"github.com/josenarvaezp/displ/pkg/ribble"
 )
 
 func main() {
-	config := generators.Config{
+	// define job's config
+	config := ribble.Config{
 		InputBuckets: []string{"input-bucket"},
 		Region:       "eu-west-2",
 		Local:        false,
@@ -16,7 +17,8 @@ func main() {
 		LogicalSplit: false,
 	}
 
-	generators.Job(
+	// define job
+	ribble.Job(
 		wordcount.WordCount,
 		config,
 	)
