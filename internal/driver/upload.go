@@ -10,7 +10,7 @@ import (
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
-	"github.com/josenarvaezp/displ/internal/aggregators"
+	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
 const (
@@ -78,7 +78,7 @@ func (d *Driver) UploadCoordinator(ctx context.Context) error {
 
 // UploadAggregators upploads the aggregator images to ECR
 func (d *Driver) UploadAggregators(ctx context.Context) error {
-	for _, aggregator := range aggregators.Aggregators {
+	for _, aggregator := range lambdas.ECRAggregators {
 		err := d.CreateRepo(ctx, aggregator)
 		if err != nil {
 			// only ignore error if repo exists already
@@ -192,7 +192,7 @@ func (d *Driver) CreateAggregatorLambdaFunctions(ctx context.Context) error {
 	dlqName := fmt.Sprintf("%s-%s", d.JobID.String(), "dlq")
 	dlqArn := fmt.Sprintf("arn:aws:sqs:%s:%s:%s", d.Config.Region, d.Config.AccountID, dlqName)
 
-	for _, aggregator := range aggregators.Aggregators {
+	for _, aggregator := range lambdas.ECRAggregators {
 		imageURI := fmt.Sprintf(
 			"%s.dkr.ecr.%s.amazonaws.com/%s:%s",
 			d.Config.AccountID,

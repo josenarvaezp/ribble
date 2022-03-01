@@ -6,18 +6,14 @@ import (
 	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
-const (
-	internalMapSumAggregator = "aggregators.Aggregators[0]"
-)
-
 // AggregatorTypeToInternalFunction returns the string name of the
 // function which computes the given aggregator
 func AggregatorTypeToInternalFunction(aggregatorType lambdas.AggregatorType) (string, error) {
 	switch aggregatorType {
 	case lambdas.MapSumAggregator:
-		return internalMapSumAggregator, nil
-	case lambdas.SumAggregator:
-		return "TODO", errors.New("unimplemented")
+		return lambdas.ECRAggregatorMapSum, nil
+	case lambdas.MapMaxAggregator:
+		return lambdas.ECRAggregatorMapMax, nil
 	default:
 		return "", errors.New("Aggregator type is not valid")
 	}

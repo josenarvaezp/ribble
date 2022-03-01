@@ -14,12 +14,12 @@ type Aggregator interface {
 
 // MapSum aggregates values from the same key by adding
 // the values up
-type MapSum map[string]Sum
+type MapSum map[string]int
 
 // Reduce processes a message emmited by a mapper
 func (ms MapSum) Reduce(messageBody *string) error {
 	// unmarshall message body
-	var res MessageSum
+	var res MessageInt
 	body := []byte(*messageBody)
 	err := json.Unmarshal(body, &res)
 	if err != nil {
@@ -57,15 +57,14 @@ func (ms MapSum) UpdateOutput(intermediateMap interface{}, wg *sync.WaitGroup) e
 	return nil
 }
 
-type Sum int
+// MapMax aggregates values from the same key
+// by getting the max value of the given key
+type MapMax map[string]int
 
-func (c Sum) Int() int {
-	return int(c)
-}
-
-func (s *Sum) Reduce(messageBody *string) error {
+// Reduce processes a message emmited by a mapper
+func (mm MapMax) Reduce(messageBody *string) error {
 	// unmarshall message body
-	var res MessageSum
+	var res MessageInt
 	body := []byte(*messageBody)
 	err := json.Unmarshal(body, &res)
 	if err != nil {
@@ -73,21 +72,50 @@ func (s *Sum) Reduce(messageBody *string) error {
 	}
 
 	// process message
+	currentKey := res.Key
 	currentValue := res.Value
 
 	// only process value if it is not empty
 	// empty values are sent to keep the same number of events per batch
 	if res.EmptyVal != true {
-		newVal := *s + currentValue
-		s = &newVal
+		previousMax, ok := mm[currentKey]
+		if ok && previousMax < currentValue {
+			// update new value
+			mm[currentKey] = currentValue
+		} else {
+			// there was no previous value so we
+			// add the new as the new max
+			mm[currentKey] = currentValue
+		}
 	}
 
 	return nil
 }
 
-// MessageSum represent a value emmited by a MapSum mapper
-type MessageSum struct {
+// UpdateOutput merges the outputMap with the intermediate map
+func (mm MapMax) UpdateOutput(intermediateMap interface{}, wg *sync.WaitGroup) error {
+	defer wg.Done()
+
+	// cast intermediate map
+	intermediateMapCast, ok := intermediateMap.(MapMax)
+	if !ok {
+		return errors.New("Error updating output")
+	}
+
+	// update output map values
+	for k, v := range intermediateMapCast {
+		if mm[k] < v {
+			// update new value
+			mm[k] = v
+		}
+	}
+
+	return nil
+}
+
+// MessageInt represent a value emmited by a MapSum or a MapMax mapper
+type MessageInt struct {
 	Key      string `json:"key,omitempty"`
-	Value    Sum    `json:"value,omitempty"`
+	Value    int    `json:"value,omitempty"`
 	EmptyVal bool   `json:"empty,omitempty"`
 }
