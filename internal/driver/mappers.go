@@ -18,7 +18,6 @@ import (
 
 // TODOs:
 // - When creating the mapper lambda remember to set up the max number of retries and max age of events
-// - reserve concurrency for the coordinator (just one)
 
 const (
 	MB           int64 = 1048576
@@ -26,11 +25,10 @@ const (
 	SUCCESS_CODE int32 = 202     // sucessful code for asynchronous lambda invokation
 )
 
-// GenerateMappingsCompleteObjects generates map batches such that each individual file is in a single batch.
-// Note that if the file doesn't fit in a batch it will be ignored. This allow users to process file where
-// the whole file is needed by a single mapper. An example is an aplication where the user wants to process
-// images using AI, and for this each image needs to be fed into the algorithm.
-func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context) ([]*lambdas.Mapping, error) {
+// GenerateMappings generates batches of input data. If logicalSplit is true
+// it genererates logical splits (currently only EOL splits are supportes), otherwise
+// the mappings are generetated one per file
+func (d *Driver) GenerateMappings(ctx context.Context, logicalSplit bool) ([]*lambdas.Mapping, error) {
 	// init mappings
 	mappings := []*lambdas.Mapping{}
 	firstMapping := lambdas.NewMapping()
@@ -46,7 +44,7 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context) ([]*lambda
 
 		for moreObjects {
 			params := &s3.ListObjectsV2Input{
-				Bucket:  &bucket.Name,
+				Bucket:  &bucket,
 				MaxKeys: 1000,
 			}
 
@@ -66,8 +64,19 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context) ([]*lambda
 			// check if there are more objects remaining
 			moreObjects = listObjectsOuput.IsTruncated
 
-			objects := objectstore.S3ObjectsToObjects(bucket.Name, listObjectsOuput.Contents)
-			partialMappings := generateMappingsForCompleteObjects(objects, lastMapping)
+			objects := objectstore.S3ObjectsToObjects(bucket, listObjectsOuput.Contents)
+
+			var partialMappings []*lambdas.Mapping
+			var mappingErr error
+
+			if logicalSplit {
+				partialMappings, mappingErr = d.generateMappingsForPartialObjects(objects, lastMapping)
+				if mappingErr != nil {
+					return nil, err
+				}
+			} else {
+				partialMappings = generateMappingsForCompleteObjects(objects, lastMapping)
+			}
 
 			if !moreObjects && i == len(d.Config.InputBuckets)-1 {
 				// last iteration of list results, add last mapping
@@ -87,8 +96,11 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context) ([]*lambda
 	return mappings, nil
 }
 
-// GenerateMappingsForCompleteObjects is a helper function that generates batches where each file
-// needs to fit in a single batch
+// GenerateMappingsForCompleteObjects is a helper function that generates map batches such that each individual
+// file is in a single batch.
+// Note that if the file doesn't fit in a batch it will be ignored. This allow users to process file where
+// the whole file is needed by a single mapper. An example is an aplication where the user wants to process
+// images using AI, and for this each image needs to be fed into the algorithm.
 func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMapping *lambdas.Mapping) []*lambdas.Mapping {
 	partialMappings := []*lambdas.Mapping{lastMapping}
 	currentMapping := 0
@@ -117,74 +129,10 @@ func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMappin
 	return partialMappings
 }
 
-// GenerateMappingsPartialObjects generates map batches splitting the files in a logical way.
+// split generates map batches splitting the files in a logical way.
 // For example, CSV files split by the end of a line. This splitting allows the framework to process
 // massive files (to a maximum of 5 TB) in a distributed way.
-func (d *Driver) GenerateMappingsPartialObjects(ctx context.Context) ([]*lambdas.Mapping, error) {
-	// init mappings
-	mappings := []*lambdas.Mapping{}
-	firstMapping := lambdas.NewMapping()
-	lastMapping := firstMapping
-
-	// used for pagination in the list objects call
-	var continuationToken *string
-
-	// generate mappings for all buckets
-	for i, bucket := range d.Config.InputBuckets {
-		// indifcates if there are more objects to be listed
-		moreObjects := true
-
-		for moreObjects {
-			params := &s3.ListObjectsV2Input{
-				Bucket:  &bucket.Name,
-				MaxKeys: 1000,
-			}
-
-			// add continuation token
-			if continuationToken != nil {
-				params.ContinuationToken = continuationToken
-			}
-
-			listObjectsOuput, err := d.ObjectStoreAPI.ListObjectsV2(ctx, params)
-			if err != nil {
-				return nil, err
-			}
-
-			// update pagination token
-			continuationToken = listObjectsOuput.NextContinuationToken
-
-			// check if there are more objects remaining
-			moreObjects = listObjectsOuput.IsTruncated
-
-			objects := objectstore.S3ObjectsToObjects(bucket.Name, listObjectsOuput.Contents)
-
-			partialMappings, err := d.generateMappingsForPartialObjects(objects, lastMapping)
-			if err != nil {
-				return nil, err
-			}
-
-			if !moreObjects && i == len(d.Config.InputBuckets)-1 {
-				// last iteration of list results, add last mapping
-				mappings = append(mappings, partialMappings...)
-			} else {
-				// there are more items for the list operation
-				// do not add last mapping as it will be added in the next list
-				lastMapping = partialMappings[len(partialMappings)-1]
-				partialMappings[len(partialMappings)-1] = nil // Erase element
-				partialMappingsMinusLast := partialMappings[:len(partialMappings)-1]
-
-				mappings = append(mappings, partialMappingsMinusLast...)
-			}
-		}
-	}
-
-	return mappings, nil
-}
-
-// split splits the object such that the first split is at most maxSize
-// and the rest of the splits are at most CHUNK_SIZE. The split is using a
-// a new line to split files
-func (d *Driver) Split(ctx context.Context, object objectstore.Object, initialByte, maxSize int64) (*objectstore.ObjectRange, error) {
+func (d *Driver) split(ctx context.Context, object objectstore.Object, initialByte, maxSize int64) (*objectstore.ObjectRange, error) {
 	//average min size of a line in a csv file
 	lookupRange := 50
 	lastByteOfSplit := maxSize
@@ -258,7 +206,7 @@ func (d *Driver) generateMappingsForPartialObjects(objects []objectstore.Object,
 		availableSpace := CHUNK_SIZE - partialMappings[currentMapping].Size
 
 		// split object to fit the current mapping
-		splitObjectWithRange, err := d.Split(context.Background(), object, 0, availableSpace)
+		splitObjectWithRange, err := d.split(context.Background(), object, 0, availableSpace)
 		if err != nil {
 			return nil, err
 		}
@@ -275,7 +223,7 @@ func (d *Driver) generateMappingsForPartialObjects(objects []objectstore.Object,
 			partialMappings = append(partialMappings, nextMapping)
 			currentMapping++
 
-			splitObjectWithRange, err = d.Split(context.Background(), object, splitObjectWithRange.FinalByte, CHUNK_SIZE)
+			splitObjectWithRange, err = d.split(context.Background(), object, splitObjectWithRange.FinalByte, CHUNK_SIZE)
 			if err != nil {
 				return nil, err
 			}
