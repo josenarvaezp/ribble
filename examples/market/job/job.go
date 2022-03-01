@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/josenarvaezp/displ/examples/wordcount"
+	"github.com/josenarvaezp/displ/examples/market"
 	"github.com/josenarvaezp/displ/pkg/ribble"
 )
 
@@ -14,12 +14,12 @@ func main() {
 		LogLevel:     1,
 		AccountID:    "000000000000",
 		Username:     "jose",
-		LogicalSplit: true,
+		LogicalSplit: false,
 	}
 
 	// define job
 	ribble.Job(
-		wordcount.WordCount,
+		market.MaxSales,
 		config,
 	)
 }
