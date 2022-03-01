@@ -91,6 +91,13 @@ func NewSetupDriver(conf *config.Config) (*Driver, error) {
 	return driver, nil
 }
 
+func NewBuildDriver(jobID uuid.UUID) *Driver {
+	// init driver with job id
+	return &Driver{
+		JobID: jobID,
+	}
+}
+
 // NewDriver creates a new Driver struct
 func NewDriver(jobID uuid.UUID, conf *config.Config) (*Driver, error) {
 	var cfg *aws.Config

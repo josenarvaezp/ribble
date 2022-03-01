@@ -11,18 +11,18 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/josenarvaezp/displ/internal/objectstore"
 	"gopkg.in/yaml.v2"
 )
 
 // Config represents the configuration file specified by the user
 type Config struct {
-	InputBuckets []*objectstore.Bucket `yaml:"input"`
-	Region       string                `yaml:"region"`
-	Local        bool                  `yaml:"local"`
-	LogLevel     int                   `yaml:"logLevel"`
-	AccountID    string                `yaml:"accountID"`
-	Username     string                `yaml:"username"`
+	InputBuckets []string `yaml:"input"`
+	Region       string   `yaml:"region"`
+	Local        bool     `yaml:"local"`
+	LogLevel     int      `yaml:"logLevel"`
+	AccountID    string   `yaml:"accountID"`
+	Username     string   `yaml:"username"`
+	LogicalSplit bool     `yaml:"logicalSplit"`
 }
 
 // ReadLocalConfigFile reads the config file from the driver's file system
