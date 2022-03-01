@@ -50,7 +50,7 @@ func GetFunctionData(i interface{}, jobID string) *FunctionData {
 		GeneratedFile: fmt.Sprintf("%s/%s/%s/%s.go",
 			GeneratedFilesDir,
 			jobID,
-			functionName,
+			"map",
 			functionName,
 		),
 		Function:  functionName,
