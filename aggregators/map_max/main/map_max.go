@@ -28,7 +28,7 @@ func init() {
 	log.SetLevel(log.ErrorLevel)
 
 	var err error
-	r, err = lambdas.NewMapSumReducer(false)
+	r, err = lambdas.NewMapMaxReducer(false)
 	if err != nil {
 		log.WithError(err).Fatal("Error starting reducer")
 		return
@@ -73,7 +73,7 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 	checkpointData.LastCheckpoint++
 
 	// holds the intermediate results
-	intermediateReducedMap := make(aggregators.MapSum)
+	intermediateReducedMap := make(aggregators.MapMax)
 
 	// processedMessagesDeleteInfo holds the data to delete messages from queue
 	processedMessagesDeleteInfo := make([]sqsTypes.DeleteMessageBatchRequestEntry, lambdas.MaxMessagesWithoutCheckpoint)
@@ -128,7 +128,7 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 			checkpointData.LastCheckpoint++
 			processedMessagesWithoutCheckpoint = 0
 			processedMessagesDeleteInfo = make([]sqsTypes.DeleteMessageBatchRequestEntry, lambdas.MaxMessagesWithoutCheckpoint)
-			intermediateReducedMap = make(aggregators.MapSum)
+			intermediateReducedMap = make(aggregators.MapMax)
 			r.Dedupe.WriteMap = lambdas.InitDedupeMap()
 		}
 

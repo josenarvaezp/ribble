@@ -3,18 +3,17 @@ package generators
 import (
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"runtime"
 	"strings"
+	"text/template"
 
 	"github.com/josenarvaezp/displ/internal/lambdas"
-	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
 var (
 	// vars used to compare user data type
-	mapSumType = reflect.TypeOf(aggregators.MapSum{})
-	sumType    = reflect.TypeOf(aggregators.Sum(0))
 	stringType = reflect.TypeOf("")
 )
 
@@ -51,7 +50,7 @@ func GetFunctionData(i interface{}, jobID string) *FunctionData {
 		GeneratedFile: fmt.Sprintf("%s/%s/%s/%s.go",
 			GeneratedFilesDir,
 			jobID,
-			functionName,
+			"map",
 			functionName,
 		),
 		Function:  functionName,
@@ -92,15 +91,42 @@ func ValidateMapper(mapper interface{}) (lambdas.AggregatorType, error) {
 	// is not a valid aggregator
 	aggregatorType := mapperType.Out(0)
 
-	if aggregatorType.ConvertibleTo(mapSumType) {
+	switch aggregatorType.Name() {
+	case "MapMax":
+		return lambdas.MapMaxAggregator, nil
+	case "MapSum":
 		return lambdas.MapSumAggregator, nil
+	default:
+		return lambdas.InvalidAggregator, errors.New("Invalid aggregator used")
+	}
+}
+
+// ExecuteMapGenerator generates a go file with the auto generated code
+// for the corresponding mapper function
+func ExecuteMapGenerator(jobID string, data *FunctionData, functionTemplate string) error {
+	// dir and file where generated code is writen to
+	generatedDirName := fmt.Sprintf("%s/%s/map", GeneratedFilesDir, jobID)
+	generatedFileName := fmt.Sprintf("%s/%s.go", generatedDirName, data.Function)
+
+	// create dir
+	if _, err := os.Stat(generatedDirName); os.IsNotExist(err) {
+		err := os.MkdirAll(generatedDirName, os.ModePerm)
+		if err != nil {
+			return err
+		}
 	}
 
-	if aggregatorType.ConvertibleTo(sumType) {
-		return lambdas.SumAggregator, nil
+	// create file
+	f, err := os.OpenFile(generatedFileName, os.O_WRONLY|os.O_CREATE, 0777)
+	if err != nil {
+		return err
 	}
+	defer f.Close()
 
-	return lambdas.InvalidAggregator, errors.New("Aggregator is invalid")
+	// generate file with template
+	t := template.Must(template.New("mapper").Parse(functionTemplate))
+	err = t.Execute(f, data)
+	return err
 }
 
 // ExecuteMapperGenerator generates code for the mapper according
@@ -110,16 +136,19 @@ func ExecuteMapperGenerator(
 	aggregatorType lambdas.AggregatorType,
 	functionData *FunctionData,
 ) error {
+	var template string
 	switch aggregatorType {
 	case lambdas.MapSumAggregator:
-		err := ExecuteMapSumGenerator(jobID, functionData)
-		if err != nil {
-			return err
-		}
-	case lambdas.SumAggregator:
-		return errors.New("Unimplemented")
+		template = mapSumTemplate
+	case lambdas.MapMaxAggregator:
+		template = mapMaxTemplate
 	default:
 		return errors.New("Invalid aggregator")
+	}
+
+	err := ExecuteMapGenerator(jobID, functionData, template)
+	if err != nil {
+		return err
 	}
 
 	return nil

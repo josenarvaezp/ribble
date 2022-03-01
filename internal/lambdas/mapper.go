@@ -163,9 +163,9 @@ func (m *Mapper) DownloadFile(object objectstore.ObjectRange) (*string, error) {
 }
 
 // EmitMapSum sends the output map in batches to the queues
-func (m *Mapper) EmitMapSum(
+func (m *Mapper) EmitMap(
 	ctx context.Context,
-	outputMap aggregators.MapSum,
+	outputMap map[string]int,
 	batchMetadata map[int]int64,
 ) error {
 	// keep dictionary of batches to allow sending keys in batches
@@ -181,7 +181,7 @@ func (m *Mapper) EmitMapSum(
 			batches[partitionQueue],
 			MapInt{
 				Key:   key,
-				Value: value.Int(),
+				Value: value,
 			},
 		)
 
@@ -377,6 +377,10 @@ func (m *Mapper) SendBatchMetadata(ctx context.Context, batchMetadata map[int]in
 	return nil
 }
 
-func RunMapSumMapper(filename string, userMap func(filename string) aggregators.MapSum) aggregators.MapSum {
+func RunMapSumMapper(filename string, userMap func(filename string) aggregators.MapSum) map[string]int {
+	return userMap(filename)
+}
+
+func RunMapMaxMapper(filename string, userMap func(filename string) aggregators.MapMax) map[string]int {
 	return userMap(filename)
 }

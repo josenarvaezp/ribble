@@ -26,14 +26,22 @@ const (
 	// Aggregator types
 	InvalidAggregator AggregatorType = iota
 	MapSumAggregator
+	MapMaxAggregator
 	SumAggregator
 )
 
 const (
 	// ECR repo aggregator names
-	ECRAggregatorMapSum string = "AggregatorMapSum"
-	ECRAggregatorSum    string = "AggregatorSum"
-	ECRAggregatorAvg    string = "AggregatorAvg"
+	ECRAggregatorMapSum string = "map_sum_aggregator"
+	ECRAggregatorMapMax string = "map_max_aggregator"
+)
+
+var (
+	// ECR repo aggregator names as a list
+	ECRAggregators []string = []string{
+		ECRAggregatorMapSum,
+		ECRAggregatorMapMax,
+	}
 )
 
 const (
