@@ -1,4 +1,4 @@
-package generators
+package ribble
 
 import (
 	"flag"
