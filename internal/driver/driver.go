@@ -15,6 +15,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -50,6 +51,7 @@ type Driver struct {
 	JobID uuid.UUID
 	// clients
 	ObjectStoreAPI objectstore.ObjectStoreAPI
+	DownloaderAPI  objectstore.ManagerDownloaderAPI
 	FaasAPI        faas.FaasAPI
 	QueuesAPI      queues.QueuesAPI
 	ImageRepoAPI   repo.ImageRepoAPI
@@ -89,6 +91,13 @@ func NewSetupDriver(conf *config.Config) (*Driver, error) {
 	return driver, nil
 }
 
+func NewBuildDriver(jobID uuid.UUID) *Driver {
+	// init driver with job id
+	return &Driver{
+		JobID: jobID,
+	}
+}
+
 // NewDriver creates a new Driver struct
 func NewDriver(jobID uuid.UUID, conf *config.Config) (*Driver, error) {
 	var cfg *aws.Config
@@ -126,9 +135,11 @@ func NewDriver(jobID uuid.UUID, conf *config.Config) (*Driver, error) {
 	}
 
 	// create and add clients to driver
-	driver.ObjectStoreAPI = s3.NewFromConfig(*cfg, func(o *s3.Options) {
+	s3Client := s3.NewFromConfig(*cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
+	driver.ObjectStoreAPI = s3Client
+	driver.DownloaderAPI = manager.NewDownloader(s3Client)
 	driver.FaasAPI = lambda.NewFromConfig(*cfg)
 	driver.QueuesAPI = sqs.NewFromConfig(*cfg)
 	driver.ImageRepoAPI = ecr.NewFromConfig(*cfg)

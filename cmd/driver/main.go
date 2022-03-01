@@ -18,11 +18,12 @@ import (
 
 var (
 	// Used for CLI flags
-	jobPath    string
-	jobID      string
-	accountID  string
-	username   string
-	configFile string
+	jobPath   string
+	jobID     string
+	accountID string
+	username  string
+	region    string
+	verbose   *int
 )
 
 func main() {
@@ -34,28 +35,31 @@ func main() {
 
 	setCredsCmd.PersistentFlags().StringVar(&accountID, "account-id", "", "AWS account id")
 	setCredsCmd.PersistentFlags().StringVar(&username, "username", "", "AWS username")
-	setCredsCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
+	setCredsCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region")
 	setCredsCmd.MarkFlagRequired("account-id")
 	setCredsCmd.MarkFlagRequired("username")
-	setCredsCmd.MarkPersistentFlagRequired("config")
+	setCredsCmd.MarkFlagRequired("region")
+	setCredsCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
-	setupCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
-	setupCmd.MarkPersistentFlagRequired("config")
+	setupCmd.PersistentFlags().StringVar(&accountID, "account-id", "", "AWS account id")
+	setupCmd.PersistentFlags().StringVar(&username, "username", "", "AWS username")
+	setupCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region")
+	setupCmd.MarkFlagRequired("account-id")
+	setupCmd.MarkFlagRequired("username")
+	setupCmd.MarkFlagRequired("region")
+	setupCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
 	buildCmd.PersistentFlags().StringVar(&jobPath, "job", "", "path to go file defining job")
-	buildCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
 	buildCmd.MarkPersistentFlagRequired("job")
-	buildCmd.MarkPersistentFlagRequired("config")
+	buildCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
 	uploadCmd.PersistentFlags().StringVar(&jobID, "job-id", "", "id of job to upload")
-	uploadCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
 	uploadCmd.MarkPersistentFlagRequired("job-id")
-	uploadCmd.MarkPersistentFlagRequired("config")
+	uploadCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
 	runCmd.PersistentFlags().StringVar(&jobID, "job-id", "", "id of job to run")
-	runCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
 	runCmd.MarkPersistentFlagRequired("job-id")
-	runCmd.MarkPersistentFlagRequired("config")
+	runCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
 	rootCmd.Execute()
 }
@@ -72,25 +76,13 @@ var buildCmd = &cobra.Command{
 	Long:  `Build the resources needed for the processing job`,
 	Run: func(cmd *cobra.Command, args []string) {
 
-		// get driver config values
-		conf, err := config.ReadLocalConfigFile(configFile)
-		if err != nil {
-			logrus.WithField(
-				"File name", configFile,
-			).WithError(err).Error("Error reading config file")
-			return
-		}
-
-		// set logger
-		logrus.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
+		// get verbosity for logs
+		verbosity, _ := cmd.Flags().GetCount("verbose")
+		logrus.SetLevel(logs.ConfigLogLevelToLevel(verbosity))
 
 		// set driver
 		jobID := uuid.New()
-		jobDriver, err := driver.NewDriver(jobID, conf)
-		if err != nil {
-			logrus.WithError(err).Error("Error initializing driver")
-			return
-		}
+		jobDriver := driver.NewBuildDriver(jobID)
 
 		// add job path info to driver
 		jobDriver.BuildData = &generators.BuildData{
@@ -113,7 +105,7 @@ var buildCmd = &cobra.Command{
 		}
 
 		// build binary that creates lambda files
-		err = jobDriver.BuildJobGenerationBinary()
+		err := jobDriver.BuildJobGenerationBinary()
 		if err != nil {
 			driverLogger.WithError(err).Fatal("Error building binary from job path")
 			return
@@ -153,7 +145,12 @@ var uploadCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
 
+		// get verbosity for logs
+		verbosity, _ := cmd.Flags().GetCount("verbose")
+		logrus.SetLevel(logs.ConfigLogLevelToLevel(verbosity))
+
 		// get driver config values
+		configFile := fmt.Sprintf("%s/%s/config.yaml", generators.GeneratedFilesDir, jobID)
 		conf, err := config.ReadLocalConfigFile(configFile)
 		if err != nil {
 			logrus.WithField(
@@ -161,9 +158,6 @@ var uploadCmd = &cobra.Command{
 			).WithError(err).Error("Error reading config file")
 			return
 		}
-
-		// set logger
-		logrus.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
 
 		// add job path info to driver
 		jobID, err := uuid.Parse(jobID)
@@ -232,7 +226,12 @@ var runCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
 
+		// get verbosity for logs
+		verbosity, _ := cmd.Flags().GetCount("verbose")
+		logrus.SetLevel(logs.ConfigLogLevelToLevel(verbosity))
+
 		// get driver config values
+		configFile := fmt.Sprintf("%s/%s/config.yaml", generators.GeneratedFilesDir, jobID)
 		conf, err := config.ReadLocalConfigFile(configFile)
 		if err != nil {
 			logrus.WithField(
@@ -240,9 +239,6 @@ var runCmd = &cobra.Command{
 			).WithError(err).Error("Error reading config file")
 			return
 		}
-
-		// set logger
-		logrus.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
 
 		// add job path info to driver
 		jobID, err := uuid.Parse(jobID)
@@ -272,7 +268,7 @@ var runCmd = &cobra.Command{
 		jobDriver.BuildData = buildData
 
 		// generate mappings from S3 input bucket
-		mappings, err := jobDriver.GenerateMappingsCompleteObjects(ctx)
+		mappings, err := jobDriver.GenerateMappings(ctx, false)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error generating mappings from S3")
 			return
@@ -313,33 +309,19 @@ var setCredsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
 
-		// get driver config values
-		conf, err := config.ReadLocalConfigFile(configFile)
-		if err != nil {
-			logrus.WithField(
-				"File name", configFile,
-			).WithError(err).Error("Error reading config file")
-			return
-		}
-
-		// set logger
-		logrus.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
+		// get verbosity for logs
+		verbosity, _ := cmd.Flags().GetCount("verbose")
+		logrus.SetLevel(logs.ConfigLogLevelToLevel(verbosity))
 
 		// set driver
-		jobDriver, err := driver.NewSetupDriver(conf)
+		jobDriver, err := driver.NewSetupDriver(&config.Config{
+			Region:    region,
+			AccountID: accountID,
+			Username:  username,
+		})
 		if err != nil {
 			logrus.WithError(err).Error("Error initializing driver")
 			return
-		}
-
-		// if flags are used for username and account id override
-		// the information fetched from the config yaml
-		if username != "" {
-			jobDriver.Config.Username = username
-		}
-
-		if accountID != "" {
-			jobDriver.Config.AccountID = accountID
 		}
 
 		// create role
@@ -388,17 +370,9 @@ var setupCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
 
-		// get driver config values
-		conf, err := config.ReadLocalConfigFile(configFile)
-		if err != nil {
-			logrus.WithField(
-				"File name", configFile,
-			).WithError(err).Error("Error reading config file")
-			return
-		}
-
-		// set logger
-		logrus.SetLevel(logs.ConfigLogLevelToLevel(conf.LogLevel))
+		// get verbosity for logs
+		verbosity, _ := cmd.Flags().GetCount("verbose")
+		logrus.SetLevel(logs.ConfigLogLevelToLevel(verbosity))
 
 		// add job path info to driver
 		jobID, err := uuid.Parse(jobID)
@@ -408,7 +382,11 @@ var setupCmd = &cobra.Command{
 		}
 
 		// set driver
-		jobDriver, err := driver.NewDriver(jobID, conf)
+		jobDriver, err := driver.NewDriver(jobID, &config.Config{
+			Region:    region,
+			AccountID: accountID,
+			Username:  username,
+		})
 		if err != nil {
 			logrus.WithError(err).Error("Error initializing driver")
 			return

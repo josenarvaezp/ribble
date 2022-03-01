@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -15,18 +17,7 @@ import (
 )
 
 // TODOs:
-// - This operation requires permission for the lambda:InvokeFunction action.
 // - When creating the mapper lambda remember to set up the max number of retries and max age of events
-// - reserve concurrency for the coordinator (just one)
-
-// 1. Create a IAM for the coordinator function. The function needs to have access to
-// Get the object from the source S3 bucket.
-// "s3:GetObject"
-// "Resource": "arn:aws:s3:::mybucket/*"
-
-// Sources:
-// - tutorial on creating an event map source for coordinator: https://docs.aws.amazon.com/lambda/latest/dg/with-s3-tutorial.html
-// -DLQ: https://aws.github.io/aws-sdk-go-v2/docs/code-examples/sqs/deadletterqueue/
 
 const (
 	MB           int64 = 1048576
@@ -34,11 +25,10 @@ const (
 	SUCCESS_CODE int32 = 202     // sucessful code for asynchronous lambda invokation
 )
 
-// GenerateMappingsCompleteObjects generates map batches such that each individual file is in a single batch.
-// Note that if the file doesn't fit in a batch it will be ignored. This allow users to process file where
-// the whole file is needed by a single mapper. An example is an aplication where the user wants to process
-// images using AI, and for this each image needs to be fed into the algorithm.
-func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context) ([]*lambdas.Mapping, error) {
+// GenerateMappings generates batches of input data. If logicalSplit is true
+// it genererates logical splits (currently only EOL splits are supportes), otherwise
+// the mappings are generetated one per file
+func (d *Driver) GenerateMappings(ctx context.Context, logicalSplit bool) ([]*lambdas.Mapping, error) {
 	// init mappings
 	mappings := []*lambdas.Mapping{}
 	firstMapping := lambdas.NewMapping()
@@ -54,7 +44,7 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context) ([]*lambda
 
 		for moreObjects {
 			params := &s3.ListObjectsV2Input{
-				Bucket:  &bucket.Name,
+				Bucket:  &bucket,
 				MaxKeys: 1000,
 			}
 
@@ -74,8 +64,19 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context) ([]*lambda
 			// check if there are more objects remaining
 			moreObjects = listObjectsOuput.IsTruncated
 
-			objects := objectstore.S3ObjectsToObjects(bucket.Name, listObjectsOuput.Contents)
-			partialMappings := generateMappingsForCompleteObjects(objects, lastMapping)
+			objects := objectstore.S3ObjectsToObjects(bucket, listObjectsOuput.Contents)
+
+			var partialMappings []*lambdas.Mapping
+			var mappingErr error
+
+			if logicalSplit {
+				partialMappings, mappingErr = d.generateMappingsForPartialObjects(objects, lastMapping)
+				if mappingErr != nil {
+					return nil, err
+				}
+			} else {
+				partialMappings = generateMappingsForCompleteObjects(objects, lastMapping)
+			}
 
 			if !moreObjects && i == len(d.Config.InputBuckets)-1 {
 				// last iteration of list results, add last mapping
@@ -95,8 +96,11 @@ func (d *Driver) GenerateMappingsCompleteObjects(ctx context.Context) ([]*lambda
 	return mappings, nil
 }
 
-// GenerateMappingsForCompleteObjects is a helper function that generates batches where each file
-// needs to fit in a single batch
+// GenerateMappingsForCompleteObjects is a helper function that generates map batches such that each individual
+// file is in a single batch.
+// Note that if the file doesn't fit in a batch it will be ignored. This allow users to process file where
+// the whole file is needed by a single mapper. An example is an aplication where the user wants to process
+// images using AI, and for this each image needs to be fed into the algorithm.
 func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMapping *lambdas.Mapping) []*lambdas.Mapping {
 	partialMappings := []*lambdas.Mapping{lastMapping}
 	currentMapping := 0
@@ -123,6 +127,117 @@ func generateMappingsForCompleteObjects(objects []objectstore.Object, lastMappin
 	}
 
 	return partialMappings
+}
+
+// split generates map batches splitting the files in a logical way.
+// For example, CSV files split by the end of a line. This splitting allows the framework to process
+// massive files (to a maximum of 5 TB) in a distributed way.
+func (d *Driver) split(ctx context.Context, object objectstore.Object, initialByte, maxSize int64) (*objectstore.ObjectRange, error) {
+	//average min size of a line in a csv file
+	lookupRange := 50
+	lastByteOfSplit := maxSize
+
+	// usually we should be able to find the last symbol in the last
+	// 100 bytes but if not, then double value until we do
+	for true {
+		// we start looking where we think is big enough to find
+		// the last end of line symbol
+		lookupRange = lookupRange * 2
+
+		startLookupByte := maxSize + initialByte - int64(lookupRange)
+
+		var buf []byte
+		writeAt := manager.NewWriteAtBuffer(buf)
+
+		if startLookupByte > object.Size {
+			// add all remaining object
+			return &objectstore.ObjectRange{
+				Bucket:      object.Bucket,
+				Key:         object.Key,
+				InitialByte: initialByte,
+				FinalByte:   object.Size,
+			}, nil
+		}
+
+		bytes := fmt.Sprintf("bytes=%d-%d", startLookupByte, maxSize+initialByte)
+		if maxSize+initialByte > object.Size {
+			// range out of range
+			bytes = fmt.Sprintf("bytes=%d-%d", startLookupByte, object.Size)
+		}
+
+		_, err := d.DownloaderAPI.Download(ctx, writeAt, &s3.GetObjectInput{
+			Bucket: &object.Bucket,
+			Key:    &object.Key,
+			Range:  aws.String(bytes),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// get byte of last new line
+		indexOfLastEndOfLine := strings.LastIndex(string(writeAt.Bytes()), "\n")
+		if indexOfLastEndOfLine == -1 {
+			// EOL not found so double the lookup range
+			lookupRange = lookupRange * 2
+			continue
+		}
+
+		// EOL found
+		lastByteOfSplit = startLookupByte + int64(indexOfLastEndOfLine)
+
+		break
+	}
+
+	return &objectstore.ObjectRange{
+		Bucket:      object.Bucket,
+		Key:         object.Key,
+		InitialByte: initialByte,
+		FinalByte:   lastByteOfSplit,
+	}, nil
+}
+
+// generateMappingsForPartialObjects is a helper function that generates batches where each file
+// needs to fit in a single batch
+func (d *Driver) generateMappingsForPartialObjects(objects []objectstore.Object, lastMapping *lambdas.Mapping) ([]*lambdas.Mapping, error) {
+	partialMappings := []*lambdas.Mapping{lastMapping}
+	currentMapping := 0
+
+	for _, object := range objects {
+		availableSpace := CHUNK_SIZE - partialMappings[currentMapping].Size
+
+		// split object to fit the current mapping
+		splitObjectWithRange, err := d.split(context.Background(), object, 0, availableSpace)
+		if err != nil {
+			return nil, err
+		}
+
+		// add splited object
+		partialMappings[currentMapping].Objects = append(partialMappings[currentMapping].Objects, *splitObjectWithRange)
+		partialMappings[currentMapping].Size = partialMappings[currentMapping].Size + splitObjectWithRange.FinalByte
+
+		// add the rest of the object
+		remainingBytes := object.Size - splitObjectWithRange.FinalByte
+		for remainingBytes > 0 {
+			// add new mapping
+			nextMapping := lambdas.NewMapping()
+			partialMappings = append(partialMappings, nextMapping)
+			currentMapping++
+
+			splitObjectWithRange, err = d.split(context.Background(), object, splitObjectWithRange.FinalByte, CHUNK_SIZE)
+			if err != nil {
+				return nil, err
+			}
+
+			splitSize := (splitObjectWithRange.FinalByte - splitObjectWithRange.InitialByte)
+
+			partialMappings[currentMapping].Objects = append(partialMappings[currentMapping].Objects, *splitObjectWithRange)
+			partialMappings[currentMapping].Size = partialMappings[currentMapping].Size + splitSize
+
+			remainingBytes = remainingBytes - splitSize
+		}
+	}
+
+	return partialMappings, nil
 }
 
 // StartMappers sends the each split into lambda
