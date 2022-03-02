@@ -384,3 +384,7 @@ func RunMapSumMapper(filename string, userMap func(filename string) aggregators.
 func RunMapMaxMapper(filename string, userMap func(filename string) aggregators.MapMax) map[string]int {
 	return userMap(filename)
 }
+
+func RunMapMinMapper(filename string, userMap func(filename string) aggregators.MapMin) map[string]int {
+	return userMap(filename)
+}

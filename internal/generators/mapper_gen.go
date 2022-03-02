@@ -92,10 +92,12 @@ func ValidateMapper(mapper interface{}) (lambdas.AggregatorType, error) {
 	aggregatorType := mapperType.Out(0)
 
 	switch aggregatorType.Name() {
-	case "MapMax":
-		return lambdas.MapMaxAggregator, nil
 	case "MapSum":
 		return lambdas.MapSumAggregator, nil
+	case "MapMax":
+		return lambdas.MapMaxAggregator, nil
+	case "MapMin":
+		return lambdas.MapMinAggregator, nil
 	default:
 		return lambdas.InvalidAggregator, errors.New("Invalid aggregator used")
 	}
@@ -142,6 +144,8 @@ func ExecuteMapperGenerator(
 		template = mapSumTemplate
 	case lambdas.MapMaxAggregator:
 		template = mapMaxTemplate
+	case lambdas.MapMinAggregator:
+		template = mapMinTemplate
 	default:
 		return errors.New("Invalid aggregator")
 	}

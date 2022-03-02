@@ -1,54 +1,63 @@
-# displ
+# Ribble
 
-## Build image
-docker build -t mapper .
+## Prerequisites
+To run Ribble you need to have the following in your local machine:
 
-## Test locally 
-mkdir -p ~/.aws-lambda-rie && curl -Lo ~/.aws-lambda-rie/aws-lambda-rie \
-https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/latest/download/aws-lambda-rie-arm64  \
-&& chmod +x ~/.aws-lambda-rie/aws-lambda-rie    
+- Docker 
+- AWS CLI installed and configured. Instructions can be found [here](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html)
+- To setup ribble your AWS user needs to have AdministratorAccess or permission to create roles and policies
 
-docker run -d -v ~/.aws-lambda-rie:/aws-lambda --entrypoint /aws-lambda/aws-lambda-rie -p 9000:8080 mapper /lambdas/mapper     
+## Set credentials
 
-curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{"bucket": "jobbucket", "id": "fa44fa0d-89de-416f-badc-00e2300acad2", "queues": 10, "size": 2713576,"rangeObjects": [{"objectBucket":"mybucket", "objectKey":"file1.csv","initialByte": 0,"finalByte": 1356788}, {"objectBucket":"mysecondbucket","objectKey":"file3.csv","initialByte": 0,"finalByte": 1356788}]}'
+Ribble needs AWS permissions to access S3, SQS, Lambda, IAM, and ECR to run a processing job. To facilitate adding these permissions into your account you can use the `set-credentials` command.  The `set-credentials` command creates an AWS role called `ribble` and it assigns to it the policies it requires to access the resources needed. It then gives the specified user permission to assume this role. Hence this command can be used by an administrator in the AWS account (someone with AWS AdministratorAccess) to give access to different users within the account that need to run ribble jobs. 
 
+```
+ribble set-credentials \
+    --account-id <your-account-id> \
+    --region <aws-region> \
+    --username <aws-username>
+```
 
-curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{"bucket": "jobbucket", "id": "fa44fa0d-89de-416f-badc-00e2300acad2", "queues": 5, "size": 2713576,"rangeObjects": [{"objectBucket":"mybucket", "objectKey":"file1.csv","initialByte": 0,"finalByte": 1356788}, {"objectBucket":"mysecondbucket","objectKey":"file3.csv","initialByte": 0,"finalByte": 1356788}]}'
+## Setup
 
-// current working mapper invokation
-curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{"jobID": "9499f791-e983-4242-96bb-adeaddb84a51", "mapping": {"bucket": "jobbucket", "id": "fa44fa0d-89de-416f-badc-00e2300acad2", "queues": 5, "size": 2713576,"rangeObjects": [{"objectBucket":"mybucket", "objectKey":"file1.csv","initialByte": 0,"finalByte": 1356788}, {"objectBucket":"mysecondbucket","objectKey":"file3.csv","initialByte": 0,"finalByte": 1356788}]}}'
+The `setup` command is used to set common resources that will be used by all ribble jobs. Specifically, this command uploads the aggregator images to ECR and creates Lambda functions for each of them. Note that you only need to use this command once when setting up the framework.
+```
+ribble setup \
+    --account-id <your-account-id> \
+    --region <aws-region> \
+    --username <aws-username>
+```
 
-// current mapper working invokation
-curl -XPOST "http://localhost:9001/2015-03-31/functions/function/invocations" -d '{"jobID": "39a0d128-3f80-49a0-83a3-e49ed424c099", "jobBucket": "jobbucket", "QueueName": "-dlq"}'
+## Build
 
-// reducer
-docker run -d -v ~/.aws-lambda-rie:/aws-lambda --entrypoint /aws-lambda/aws-lambda-rie -p 9001:8081 reducer /lambdas/reducer 
+The `build` command is used to create the resources locally that are needed to run the job. Specifically it auto-generates AWS lambda complacent `.go` files for the job coordinator and the mapper function. It also auto-generates `Dockerfiles` for each of them and builds the images.
 
+An example of how to define a job can be found here: [Word count example](https://github.com/josenarvaezp/ribble/tree/main/examples/wordcount). It is simple, you need to define your map function and then create a main package where you need to define the ribble job using the function `ribble.Job()` from the [ribble package](https://github.com/josenarvaezp/ribble/tree/main/pkg/ribble/ribble.go). 
 
+The map function you define has some restrictions:
+1. It must take a string as input and this string is the file name of a file to process
+2. It must return one of the aggregators defined here: [ribble aggregators](https://github.com/josenarvaezp/ribble/tree/main/pkg/aggregators/aggregators.go)
+The available aggregators include:
+- `MapSum`: MapSum adds all values that have the same key
+- `MapMax`: MapMax gets the maximum value in each key
+- `MapMin`: MapMin gets the minimum value in each key
 
-To bring up localstack:
-docker-compose up -d
-docker-compose down 
-docker-compose build
+```
+ribble build --job <path-to-your-job-definition>
+```
 
-Create a bucket:
-awslocal s3 mb s3://jobbucket
-awslocal s3 mb s3://mybucket
-awslocal s3 mb s3://mysecondbucket
+## Upload
 
-Copy csv objects to bucket
-awslocal s3 cp ./build/test_data/annual-enterprise-survey-2020-financial-year-provisional-size-bands-csv.csv  s3://mybucket/file1.csv
-awslocal s3 cp ./build/test_data/annual-enterprise-survey-2020-financial-year-provisional-size-bands-csv.csv  s3://mysecondbucket/file3.csv
+The `upload` command is used to upload all the resources that were genererated by the `build` command and creates additional resources needed to run the ribble job such as the SQS queues that hold the intermediate data, a bucket for the job, amongst other. 
 
+```
+ribble upload --job-id <id-of-job>
+```
 
-awslocal s3 ls s3://jobbucket/metadata/
-awslocal s3api get-object --bucket jobbucket --key metadata/fa44fa0d-89de-416f-badc-00e2300acad2 test
+## Run
 
-awslocal s3api get-object --bucket jobbucket --key output/feff263f-9da5-4ad9-af60-e2edf5292828 ro5
+The `run` command is used to run the job with the given job id. Note that this command runs the ribble job but does not wait until it has completed. If any errors occurred or you want to know the status of the job you need to use `TODO`
 
-// add config to job bucket
-awslocal s3 cp ./config.yaml s3://09cd3797-1b53-4c61-b24f-b454bbec73a7/config.yaml
-
-
-Reqs:
-AWS account needs to have AdministratorAccess  or make sure the current user has permission to assume role: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_permissions-to-switch.html
+```
+ribble upload --job-id <id-of-job>
+```

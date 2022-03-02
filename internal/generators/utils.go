@@ -14,6 +14,8 @@ func AggregatorTypeToInternalFunction(aggregatorType lambdas.AggregatorType) (st
 		return lambdas.ECRAggregatorMapSum, nil
 	case lambdas.MapMaxAggregator:
 		return lambdas.ECRAggregatorMapMax, nil
+	case lambdas.MapMinAggregator:
+		return lambdas.ECRAggregatorMapMin, nil
 	default:
 		return "", errors.New("Aggregator type is not valid")
 	}

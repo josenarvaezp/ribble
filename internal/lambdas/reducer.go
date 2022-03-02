@@ -27,6 +27,7 @@ const (
 	InvalidAggregator AggregatorType = iota
 	MapSumAggregator
 	MapMaxAggregator
+	MapMinAggregator
 	SumAggregator
 )
 
@@ -34,6 +35,7 @@ const (
 	// ECR repo aggregator names
 	ECRAggregatorMapSum string = "map_sum_aggregator"
 	ECRAggregatorMapMax string = "map_max_aggregator"
+	ECRAggregatorMapMin string = "map_min_aggregator"
 )
 
 var (
@@ -41,6 +43,7 @@ var (
 	ECRAggregators []string = []string{
 		ECRAggregatorMapSum,
 		ECRAggregatorMapMax,
+		ECRAggregatorMapMin,
 	}
 )
 
