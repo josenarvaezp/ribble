@@ -129,7 +129,7 @@ func (d *Driver) CreateMapperLambdaFunction(ctx context.Context) error {
 		d.BuildData.MapperData.ImageTag,
 	)
 	functionDescription := fmt.Sprintf("Ribble function for %s", d.BuildData.MapperData.Function)
-	functionTimeout := int32(300)
+	functionTimeout := int32(900)
 	dlqName := fmt.Sprintf("%s-%s", d.JobID.String(), "dlq")
 	dlqArn := fmt.Sprintf("arn:aws:sqs:%s:%s:%s", d.Config.Region, d.Config.AccountID, dlqName)
 	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
@@ -162,7 +162,7 @@ func (d *Driver) CreateCoordinatorLambdaFunction(ctx context.Context) error {
 		d.BuildData.CoordinatorData.ImageTag,
 	)
 	functionDescription := fmt.Sprintf("Ribble function for %s", d.BuildData.CoordinatorData.Function)
-	functionTimeout := int32(300)
+	functionTimeout := int32(900)
 	dlqName := fmt.Sprintf("%s-%s", d.JobID.String(), "dlq")
 	dlqArn := fmt.Sprintf("arn:aws:sqs:%s:%s:%s", d.Config.Region, d.Config.AccountID, dlqName)
 	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
@@ -186,11 +186,9 @@ func (d *Driver) CreateCoordinatorLambdaFunction(ctx context.Context) error {
 	return err
 }
 
-func (d *Driver) CreateAggregatorLambdaFunctions(ctx context.Context) error {
+func (d *Driver) CreateAggregatorLambdaFunctions(ctx context.Context, queueARN *string) error {
 	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
-	functionTimeout := int32(300)
-	dlqName := fmt.Sprintf("%s-%s", d.JobID.String(), "dlq")
-	dlqArn := fmt.Sprintf("arn:aws:sqs:%s:%s:%s", d.Config.Region, d.Config.AccountID, dlqName)
+	functionTimeout := int32(900)
 
 	for _, aggregator := range lambdas.ECRAggregators {
 		imageURI := fmt.Sprintf(
@@ -209,7 +207,7 @@ func (d *Driver) CreateAggregatorLambdaFunctions(ctx context.Context) error {
 			FunctionName: &aggregator,
 			Role:         &ribbleRoleArn,
 			DeadLetterConfig: &types.DeadLetterConfig{
-				TargetArn: &dlqArn,
+				TargetArn: queueARN,
 			},
 			Description: &functionDescription,
 			PackageType: types.PackageTypeImage,
@@ -243,5 +241,3 @@ func repoAlreadyExists(err error) bool {
 // 		Qualifier: "",
 // 	})
 // }
-
-// TODO: permissions Amazon CloudWatch Logs for log streaming and X-Ray for request tracing

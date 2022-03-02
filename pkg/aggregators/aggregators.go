@@ -82,7 +82,7 @@ func (mm MapMax) Reduce(messageBody *string) error {
 		if ok && previousMax < currentValue {
 			// update new value
 			mm[currentKey] = currentValue
-		} else {
+		} else if !ok {
 			// there was no previous value so we
 			// add the new as the new max
 			mm[currentKey] = currentValue
@@ -104,8 +104,75 @@ func (mm MapMax) UpdateOutput(intermediateMap interface{}, wg *sync.WaitGroup) e
 
 	// update output map values
 	for k, v := range intermediateMapCast {
-		if mm[k] < v {
+		previousMax, ok := mm[k]
+		if ok && previousMax < v {
 			// update new value
+			mm[k] = v
+		} else if !ok {
+			// there was no previous value so we
+			// add the new as the new max
+			mm[k] = v
+		}
+	}
+
+	return nil
+}
+
+// MapMin aggregates values from the same key
+// by getting the min value of the given key
+type MapMin map[string]int
+
+// Reduce processes a message emmited by a mapper
+func (mm MapMin) Reduce(messageBody *string) error {
+	// unmarshall message body
+	var res MessageInt
+	body := []byte(*messageBody)
+	err := json.Unmarshal(body, &res)
+	if err != nil {
+		return err
+	}
+
+	// process message
+	currentKey := res.Key
+	currentValue := res.Value
+
+	// only process value if it is not empty
+	// empty values are sent to keep the same number of events per batch
+	if res.EmptyVal != true {
+		previousMin, ok := mm[currentKey]
+		if ok && previousMin > currentValue {
+			// update new value
+			mm[currentKey] = currentValue
+		} else if !ok {
+			// there was no previous value so we
+			// add the new as the new min
+			mm[currentKey] = currentValue
+		}
+	}
+
+	return nil
+}
+
+// UpdateOutput merges the outputMap with the intermediate map
+func (mm MapMin) UpdateOutput(intermediateMap interface{}, wg *sync.WaitGroup) error {
+	defer wg.Done()
+
+	// cast intermediate map
+	intermediateMapCast, ok := intermediateMap.(MapMin)
+	if !ok {
+		return errors.New("Error updating output")
+	}
+
+	// update output map values
+	for k, v := range intermediateMapCast {
+		previousMin, ok := mm[k]
+		if ok && previousMin > v {
+			// update new value as intermediate has
+			// a lower value
+			mm[k] = v
+		} else if !ok {
+			// there is no value in output map
+			// so add value
 			mm[k] = v
 		}
 	}

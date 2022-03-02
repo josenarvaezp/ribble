@@ -11,8 +11,8 @@ import (
 	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
-// NewMapMaxReducer initializes a new reducer with its required clients
-func NewMapMaxReducer(
+// NewMapMinReducer initializes a new reducer with its required clients
+func NewMapMinReducer(
 	local bool,
 ) (*Reducer, error) {
 	var cfg *aws.Config
@@ -25,7 +25,7 @@ func NewMapMaxReducer(
 	reducer := &Reducer{
 		Region: region,
 		Local:  local,
-		Output: make(aggregators.MapMax),
+		Output: make(aggregators.MapMin),
 		Dedupe: InitDedupe(),
 	}
 

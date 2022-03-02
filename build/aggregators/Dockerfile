@@ -17,11 +17,15 @@ ADD ./pkg ./pkg
 ADD ./internal ./internal
 ADD ./aggregators ./aggregators
 
-# build lambdas
+# build aggregators
 RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_sum ./aggregators/map_sum/main/map_sum.go 
+RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_max ./aggregators/map_max/main/map_max.go 
+RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_min ./aggregators/map_min/main/map_min.go 
 
 # compress
 RUN upx --best --lzma /build/map_sum
+RUN upx --best --lzma /build/map_max
+RUN upx --best --lzma /build/map_min
 
 # Build runtime for map sum aggregator
 FROM alpine as map_sum
@@ -29,3 +33,17 @@ FROM alpine as map_sum
 COPY --from=build /build/map_sum /map_sum
 
 ENTRYPOINT [ "/map_sum" ]
+
+# Build runtime for map max aggregator
+FROM alpine as map_max
+
+COPY --from=build /build/map_max /map_max
+
+ENTRYPOINT [ "/map_max" ]
+
+# Build runtime for map min aggregator
+FROM alpine as map_min
+
+COPY --from=build /build/map_min /map_min
+
+ENTRYPOINT [ "/map_min" ]

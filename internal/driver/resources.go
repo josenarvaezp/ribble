@@ -39,6 +39,33 @@ func (d *Driver) CreateJobBucket(ctx context.Context) error {
 	return nil
 }
 
+// CreateDQL creates the dead-letter queue for the service
+func (d *Driver) CreateAggregatorsDQL(ctx context.Context) (*string, error) {
+	// create dead-letter queue
+	dlqName := "ribble_aggregators_dlq"
+	dlqParams := &sqs.CreateQueueInput{
+		QueueName: &dlqName,
+	}
+
+	dlqOutput, err := d.QueuesAPI.CreateQueue(ctx, dlqParams)
+	if err != nil {
+		return nil, err
+	}
+
+	// create policy and convert it to json
+	getQueueAttributesParams := &sqs.GetQueueAttributesInput{
+		QueueUrl:       dlqOutput.QueueUrl,
+		AttributeNames: []types.QueueAttributeName{types.QueueAttributeNameQueueArn},
+	}
+	attributes, err := d.QueuesAPI.GetQueueAttributes(ctx, getQueueAttributesParams)
+	if err != nil {
+		return nil, err
+	}
+
+	dlqARN := attributes.Attributes["QueueArn"]
+	return &dlqARN, err
+}
+
 // CreateQueues creates numQueues. This queues will be used by the framework
 // to send data from the mappers to the reducers.
 func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {

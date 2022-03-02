@@ -42,10 +42,8 @@ func main() {
 	setCredsCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
 	setupCmd.PersistentFlags().StringVar(&accountID, "account-id", "", "AWS account id")
-	setupCmd.PersistentFlags().StringVar(&username, "username", "", "AWS username")
 	setupCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region")
 	setupCmd.MarkFlagRequired("account-id")
-	setupCmd.MarkFlagRequired("username")
 	setupCmd.MarkFlagRequired("region")
 	setupCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
@@ -120,17 +118,10 @@ var buildCmd = &cobra.Command{
 		}
 
 		// build mapper and coordinator docker images
-		fmt.Println("Generating Images...")
+		fmt.Println("Building docker images...")
 		err = jobDriver.BuildDockerCustomImages()
 		if err != nil {
 			driverLogger.WithError(err).Fatal("Error building images")
-			return
-		}
-
-		// build aggregator images
-		err = jobDriver.BuildAggregatorImages()
-		if err != nil {
-			driverLogger.WithError(err).Fatal("Error building aggregator images")
 			return
 		}
 
@@ -359,7 +350,7 @@ var setCredsCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("IAM resources created succesfully")
+		fmt.Println("Ribble credentials created succesfully")
 	},
 }
 
@@ -374,40 +365,46 @@ var setupCmd = &cobra.Command{
 		verbosity, _ := cmd.Flags().GetCount("verbose")
 		logrus.SetLevel(logs.ConfigLogLevelToLevel(verbosity))
 
-		// add job path info to driver
-		jobID, err := uuid.Parse(jobID)
-		if err != nil {
-			logrus.WithError(err).Error("Error parsing ID, it must be an uuid")
-			return
-		}
-
 		// set driver
-		jobDriver, err := driver.NewDriver(jobID, &config.Config{
+		jobDriver, err := driver.NewDriver(uuid.Nil, &config.Config{
 			Region:    region,
 			AccountID: accountID,
-			Username:  username,
 		})
 		if err != nil {
 			logrus.WithError(err).Error("Error initializing driver")
 			return
 		}
-		jobDriver.JobID = jobID
 
-		driverLogger := logrus.WithFields(logrus.Fields{
-			"Job ID": jobID.String(),
-		})
+		// build aggregator images
+		fmt.Println("Building docker images for the aggregators...")
+		err = jobDriver.BuildAggregatorImages()
+		if err != nil {
+			logrus.WithError(err).Fatal("Error building aggregator images")
+			return
+		}
 
+		// upload images to ECR
+		fmt.Println("Uploading images to ECR...")
 		err = jobDriver.UploadAggregators(ctx)
 		if err != nil {
-			driverLogger.WithError(err).Error("Error uploading aggregator images")
+			logrus.WithError(err).Error("Error uploading aggregator images")
 			return
 		}
 
 		// create lambda aggregator function
-		err = jobDriver.CreateAggregatorLambdaFunctions(ctx)
+		fmt.Println("Creating aggregator lambda functions...")
+
+		queueARN, err := jobDriver.CreateAggregatorsDQL(ctx)
 		if err != nil {
-			driverLogger.WithError(err).Error("Error creating aggreagots lambda functions")
+			logrus.WithError(err).Error("Error uploading aggregator images")
 			return
 		}
+		err = jobDriver.CreateAggregatorLambdaFunctions(ctx, queueARN)
+		if err != nil {
+			logrus.WithError(err).Error("Error creating aggreagots lambda functions")
+			return
+		}
+
+		fmt.Println("Ribble resources created succesfully")
 	},
 }
