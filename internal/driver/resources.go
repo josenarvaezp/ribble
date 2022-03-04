@@ -69,6 +69,16 @@ func (d *Driver) CreateAggregatorsDQL(ctx context.Context) (*string, error) {
 // CreateQueues creates numQueues. This queues will be used by the framework
 // to send data from the mappers to the reducers.
 func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
+	// create final reduce queue
+	finalQueueName := fmt.Sprintf("%s-%s", d.JobID.String(), "final-aggregator")
+
+	_, err := d.QueuesAPI.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: &finalQueueName,
+	})
+	if err != nil {
+		return err
+	}
+
 	// create dead-letter queue
 	dlqName := fmt.Sprintf("%s-%s", d.JobID.String(), "dlq")
 	dlqParams := &sqs.CreateQueueInput{

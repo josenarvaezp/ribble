@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -308,6 +309,97 @@ func (m *Mapper) getQueuePartition(key string) int {
 	return partitionQueue
 }
 
+// GetRandomQueuePartition generates a random number
+// by using a generated uuid as the seed for the random
+// number generator
+func (m *Mapper) GetRandomQueuePartition() int {
+	bi := big.NewInt(0)
+	h := md5.New()
+	h.Write([]byte(uuid.New().String()))
+	hexstr := hex.EncodeToString(h.Sum(nil))
+	bi.SetString(hexstr, 16)
+
+	newSource := rand.NewSource(int64(bi.Uint64()))
+	randomWithSeed := rand.New(newSource)
+	return randomWithSeed.Intn(int(m.NumQueues) + 1)
+}
+
+// EmitValues sends the data (a single value) produced by a mapper
+func (m *Mapper) EmitValue(ctx context.Context, partition int, value int) error {
+	// use map id as message id as only one value per map is emited
+	messageID := m.MapID.String()
+
+	// encode map input into JSON
+	p, err := json.Marshal(MapInt{
+		Value: value,
+	})
+	if err != nil {
+		return err
+	}
+	messageJSONString := string(p)
+
+	queueName := fmt.Sprintf("%s-%d", m.JobID.String(), partition)
+	queueURL := GetQueueURL(queueName, m.Region, m.AccountID, m.local)
+	params := &sqs.SendMessageInput{
+		MessageBody: &messageJSONString,
+		MessageAttributes: map[string]types.MessageAttributeValue{
+			MessageIDAttribute: {
+				DataType:    &stringDataType,
+				StringValue: &messageID,
+			},
+		},
+		QueueUrl: &queueURL,
+	}
+	_, err = m.QueuesAPI.SendMessage(ctx, params)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SendMetadata sends the metadata to the metadata queues for mappers
+// that work on single values
+func (m *Mapper) SendMetadata(ctx context.Context, partition int) error {
+
+	// loop through the queues
+	for i := 0; i < int(m.NumQueues); i++ {
+		// send params
+		queueName := fmt.Sprintf("%s-%d-meta", m.JobID.String(), i)
+		queueURL := GetQueueURL(queueName, m.Region, m.AccountID, m.local)
+		params := &sqs.SendMessageInput{
+			QueueUrl: &queueURL,
+		}
+
+		meta := &QueueMetadataSingleValue{
+			MapID: m.MapID.String(),
+			Sent:  false,
+		}
+
+		// mapper sent value to this partition
+		if partition == i {
+			meta.Sent = true
+		}
+
+		// encode metadata into JSON
+		p, err := json.Marshal(meta)
+		if err != nil {
+			return err
+		}
+		metaJSONString := string(p)
+
+		// add metadata to body
+		params.MessageBody = &metaJSONString
+
+		_, err = m.QueuesAPI.SendMessage(ctx, params)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // SendFinishedEvent sends an event to the mappers-done queue to indicate
 // that the current mappers has finished processing
 func (m *Mapper) SendFinishedEvent(ctx context.Context) error {
@@ -331,6 +423,13 @@ func (m *Mapper) SendFinishedEvent(ctx context.Context) error {
 type QueueMetadata struct {
 	MapID      string `json:"mapID"`
 	NumBatches int    `json:"numBatches"`
+}
+
+// QueueMetadataSingleValue is used to send events to the metadata queues
+// and it indicates if a message was sent
+type QueueMetadataSingleValue struct {
+	MapID string `json:"mapID"`
+	Sent  bool   `json:"sent"`
 }
 
 // SendBatchMetadata sends the number of batches the current mapper sent to each of the queues
@@ -386,5 +485,9 @@ func RunMapMaxMapper(filename string, userMap func(filename string) aggregators.
 }
 
 func RunMapMinMapper(filename string, userMap func(filename string) aggregators.MapMin) map[string]int {
+	return userMap(filename)
+}
+
+func RunSumMapper(filename string, userMap func(filename string) aggregators.Sum) aggregators.Sum {
 	return userMap(filename)
 }

@@ -110,7 +110,7 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 
 			// save intermediate dedupe
 			wg.Add(1)
-			go r.SaveIntermediateDedupe(ctx, checkpointData.LastCheckpoint, &wg)
+			go r.SaveIntermediateDedupe(ctx, checkpointData.LastCheckpoint, r.Dedupe.WriteMap, &wg)
 
 			// save intermediate map
 			wg.Add(1)

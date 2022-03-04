@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	sqsTypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/objectstore"
@@ -33,9 +34,11 @@ const (
 
 const (
 	// ECR repo aggregator names
-	ECRAggregatorMapSum string = "map_sum_aggregator"
-	ECRAggregatorMapMax string = "map_max_aggregator"
-	ECRAggregatorMapMin string = "map_min_aggregator"
+	ECRAggregatorMapSum   string = "map_sum_aggregator"
+	ECRAggregatorMapMax   string = "map_max_aggregator"
+	ECRAggregatorMapMin   string = "map_min_aggregator"
+	ECRAggregatorSum      string = "sum_aggregator"
+	ECRAggregatorSumFinal string = "sum_final_aggregator"
 )
 
 var (
@@ -44,6 +47,8 @@ var (
 		ECRAggregatorMapSum,
 		ECRAggregatorMapMax,
 		ECRAggregatorMapMin,
+		ECRAggregatorSum,
+		ECRAggregatorSumFinal,
 	}
 )
 
@@ -59,6 +64,7 @@ type ReducerInput struct {
 	ReducerID      uuid.UUID `json:"reducerID"`
 	QueuePartition int       `json:"queuePartition"`
 	NumMappers     int       `json:"numMappers"`
+	NumReducers    int       `json:"numReducers"`
 }
 
 // Reducer is an interface that implements ReducerAPI
@@ -78,6 +84,7 @@ type Reducer struct {
 	Local          bool
 	Output         aggregators.Aggregator
 	Dedupe         *Dedupe
+	DedupeSimple   *DedupeSimple
 	mu             sync.Mutex
 }
 
@@ -174,6 +181,94 @@ func (r *Reducer) GetNumberOfBatchesToProcess(ctx context.Context) (*int, error)
 	return &totalNumOfMessagesToProcess, nil
 }
 
+// GetNumberOfMessagesToProcess gets the number of messages the reducer needs to process
+// based on the metadata available in the metadata queue for that reducer
+func (r *Reducer) GetNumberOfMessagesToProcess(ctx context.Context) (*int, error) {
+	// holds number of messages to process
+	totalNumOfMessagesToProcess := 0
+
+	// receive message params
+	queueName := fmt.Sprintf("%s-%d-meta", r.JobID.String(), r.QueuePartition)
+	queueURL := GetQueueURL(queueName, r.Region, r.AccountID, r.Local)
+	params := &sqs.ReceiveMessageInput{
+		QueueUrl:            &queueURL,
+		MaxNumberOfMessages: MaxItemsPerBatch,
+		WaitTimeSeconds:     5,
+	}
+
+	// dedupeMap is used to check if we have processed a message already
+	dedupeMap := make(map[string]bool)
+	mappersProccessedCount := 0
+
+	// get metadata until we have metadata from each mapper
+	for mappersProccessedCount != r.NumMappers {
+		// haven't recived all metadata from all mappers
+		output, err := r.QueuesAPI.ReceiveMessage(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, message := range output.Messages {
+
+			// unmarshal metadata message
+			var res QueueMetadataSingleValue
+			body := []byte(*message.Body)
+			err = json.Unmarshal(body, &res)
+			if err != nil {
+				return nil, err
+			}
+
+			// add to totalNumOfMessagesToProcess if we have not
+			// processed the current message already
+			if _, ok := dedupeMap[res.MapID]; !ok {
+				dedupeMap[res.MapID] = true
+				if res.Sent {
+					totalNumOfMessagesToProcess = totalNumOfMessagesToProcess + 1
+				}
+
+				mappersProccessedCount++
+			}
+		}
+	}
+
+	return &totalNumOfMessagesToProcess, nil
+}
+
+// EmitValues sends the data (a single value) produced by a reducer to the
+// final reduce queue
+func (r *Reducer) EmitValue(ctx context.Context, value int) error {
+	// use map id as message id as only one value per map is emited
+	reducerID := r.ReducerID.String()
+
+	// encode input into JSON
+	p, err := json.Marshal(MapInt{
+		Value: value,
+	})
+	if err != nil {
+		return err
+	}
+	messageJSONString := string(p)
+
+	queueName := fmt.Sprintf("%s-%s", r.JobID.String(), "final-aggregator")
+	queueURL := GetQueueURL(queueName, r.Region, r.AccountID, false)
+	params := &sqs.SendMessageInput{
+		MessageBody: &messageJSONString,
+		MessageAttributes: map[string]types.MessageAttributeValue{
+			MessageIDAttribute: {
+				DataType:    &stringDataType,
+				StringValue: &reducerID,
+			},
+		},
+		QueueUrl: &queueURL,
+	}
+	_, err = r.QueuesAPI.SendMessage(ctx, params)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // SaveIntermediateOutput saves the intermediate output into an S3 object
 func (r *Reducer) SaveIntermediateOutput(
 	ctx context.Context,
@@ -193,11 +288,11 @@ func (r *Reducer) SaveIntermediateOutput(
 }
 
 // SaveIntermediateDedupe saves the intermediate dedupe data to an S3 file
-func (r *Reducer) SaveIntermediateDedupe(ctx context.Context, currentCheckpoint int, wg *sync.WaitGroup) error {
+func (r *Reducer) SaveIntermediateDedupe(ctx context.Context, currentCheckpoint int, dedupeMap interface{}, wg *sync.WaitGroup) error {
 	defer wg.Done()
 
 	// encode map to JSON
-	p, err := json.Marshal(r.Dedupe.WriteMap)
+	p, err := json.Marshal(dedupeMap)
 	if err != nil {
 		return err
 	}

@@ -98,6 +98,8 @@ func ValidateMapper(mapper interface{}) (lambdas.AggregatorType, error) {
 		return lambdas.MapMaxAggregator, nil
 	case "MapMin":
 		return lambdas.MapMinAggregator, nil
+	case "Sum":
+		return lambdas.SumAggregator, nil
 	default:
 		return lambdas.InvalidAggregator, errors.New("Invalid aggregator used")
 	}
@@ -146,6 +148,8 @@ func ExecuteMapperGenerator(
 		template = mapMaxTemplate
 	case lambdas.MapMinAggregator:
 		template = mapMinTemplate
+	case lambdas.SumAggregator:
+		template = sumTemplate
 	default:
 		return errors.New("Invalid aggregator")
 	}

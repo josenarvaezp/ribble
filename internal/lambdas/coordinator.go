@@ -201,6 +201,50 @@ func (c *Coordinator) InvokeReducers(ctx context.Context, reducerName string) er
 	return nil
 }
 
+// InvokeReducer is used to invoke the final reducer
+func (c *Coordinator) InvokeReducer(ctx context.Context, reducerName string) error {
+	// function arn
+	functionArn := fmt.Sprintf(
+		"arn:aws:lambda:%s:%s:function:%s",
+		c.Region,
+		c.AccountID,
+		reducerName,
+	)
+
+	// encode reducer input to json
+	reducerInput := ReducerInput{
+		JobID:       c.JobID,
+		ReducerID:   uuid.New(),
+		NumReducers: int(c.NumQueues),
+		NumMappers:  int(c.NumMappers),
+	}
+	requestPayload, err := json.Marshal(reducerInput)
+	if err != nil {
+		return err
+	}
+
+	result, err := c.FaasAPI.Invoke(
+		ctx,
+		&lambda.InvokeInput{
+			FunctionName:   aws.String(functionArn),
+			Payload:        requestPayload,
+			InvocationType: types.InvocationTypeEvent,
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	// error is ignored from asynch invokation and result only holds the status code
+	// check status code
+	if result.StatusCode != 202 { //SUCCESS_CODE
+		// TODO: stop execution and inform the user about the errors
+		return errors.New("Error starting mappers")
+	}
+
+	return nil
+}
+
 // AreReducersDone reads events from the reducers-done queue to check
 // if all reducers are done
 func (c *Coordinator) AreReducersDone(ctx context.Context) error {

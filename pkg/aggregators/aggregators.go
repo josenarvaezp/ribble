@@ -180,6 +180,54 @@ func (mm MapMin) UpdateOutput(intermediateMap interface{}, wg *sync.WaitGroup) e
 	return nil
 }
 
+// Sum aggregates values emitted by adding them up
+type Sum int
+
+// Int converts a Sum type to int
+func (c Sum) Int() int {
+	return int(c)
+}
+
+// Reduce aggregates values emitted by adding them up
+func (s Sum) Reduce(messageBody *string) error {
+	// unmarshall message body
+	var res MessageInt
+	body := []byte(*messageBody)
+	err := json.Unmarshal(body, &res)
+	if err != nil {
+		return err
+	}
+
+	// process message
+	currentValue := res.Value
+
+	// only process value if it is not empty
+	// empty values are sent to keep the same number of events per batch
+	if res.EmptyVal != true {
+		newVal := Sum(s.Int() + currentValue)
+		s = newVal
+	}
+
+	return nil
+}
+
+// UpdateOutput merges the previous Sum value by adding the new intermediate value
+func (s Sum) UpdateOutput(intermediateValue interface{}, wg *sync.WaitGroup) error {
+	defer wg.Done()
+
+	// cast intermediate map
+	intermediateValueCast, ok := intermediateValue.(*Sum)
+	if !ok {
+		return errors.New("Error updating output")
+	}
+
+	// update output map values
+	newVal := Sum(s.Int() + intermediateValueCast.Int())
+	s = newVal
+
+	return nil
+}
+
 // MessageInt represent a value emmited by a MapSum or a MapMax mapper
 type MessageInt struct {
 	Key      string `json:"key,omitempty"`

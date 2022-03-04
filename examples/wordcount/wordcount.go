@@ -29,3 +29,26 @@ func WordCount(filename string) aggregators.MapSum {
 
 	return output
 }
+
+func SingleWordCount(filename string) aggregators.Sum {
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	output := aggregators.Sum(0)
+	for scanner.Scan() {
+		line := scanner.Text()
+		words := strings.Fields(line)
+		for _, word := range words {
+			if word == "hello" {
+				output = output + aggregators.Sum(1)
+			}
+		}
+	}
+
+	return output
+}
