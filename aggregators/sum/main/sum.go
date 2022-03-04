@@ -10,7 +10,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"sync"
 
 	"github.com/aws/aws-lambda-go/lambda"
@@ -28,7 +27,7 @@ func init() {
 	log.SetLevel(log.ErrorLevel)
 
 	var err error
-	r, err = lambdas.NewMapSumReducer(false)
+	r, err = lambdas.NewSumReducer(false)
 	if err != nil {
 		log.WithError(err).Fatal("Error starting reducer")
 		return
@@ -59,32 +58,29 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 		reducerLogger.WithError(err).Error("Error reading checkpoint")
 		return err
 	}
-
-	// batch metadata - number of batches the reducer needs to process
-	totalBatchesToProcess, err := r.GetNumberOfBatchesToProcess(ctx)
-	if err != nil {
-		reducerLogger.WithError(err).Error("Error getting queue metadata")
-		return err
-	}
-	totalProcessedBatches := 0
-
 	// checkpoint info
 	processedMessagesWithoutCheckpoint := 0
 	checkpointData.LastCheckpoint++
 
-	// holds the intermediate results
-	intermediateReducedMap := make(aggregators.MapSum)
+	// messages metadata - number of messages the reducer needs to process
+	totalMessagesToProcess, err := r.GetNumberOfMessagesToProcess(ctx)
+	if err != nil {
+		reducerLogger.WithError(err).Error("Error getting queue metadata")
+		return err
+	}
+	totalProcessedMessages := 0
 
 	// processedMessagesDeleteInfo holds the data to delete messages from queue
 	processedMessagesDeleteInfo := make([]sqsTypes.DeleteMessageBatchRequestEntry, lambdas.MaxMessagesWithoutCheckpoint)
+
+	// holds the intermediate results
+	intermediateReducedSum := aggregators.Sum(0)
 
 	// use same parameters for all get messages requests
 	recieveMessageParams := &sqs.ReceiveMessageInput{
 		QueueUrl:            &queueURL,
 		MaxNumberOfMessages: lambdas.MaxItemsPerBatch,
 		MessageAttributeNames: []string{
-			lambdas.MapIDAttribute,
-			lambdas.BatchIDAttribute,
 			lambdas.MessageIDAttribute,
 		},
 		WaitTimeSeconds: int32(5),
@@ -106,19 +102,19 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 			// in the background while we keep processing messages
 
 			// merge the dedupe map so that the read dedupe map is up to date
-			r.Dedupe.Merge()
+			r.DedupeSimple.Merge()
 
 			// save intermediate dedupe
 			wg.Add(1)
-			go r.SaveIntermediateDedupe(ctx, checkpointData.LastCheckpoint, r.Dedupe.WriteMap, &wg)
+			go r.SaveIntermediateDedupe(ctx, checkpointData.LastCheckpoint, r.DedupeSimple.ReadMap, &wg)
 
 			// save intermediate map
 			wg.Add(1)
-			go r.SaveIntermediateOutput(ctx, intermediateReducedMap, checkpointData.LastCheckpoint, &wg)
+			go r.SaveIntermediateOutput(ctx, &intermediateReducedSum, checkpointData.LastCheckpoint, &wg)
 
 			// update output map with reduced intermediate results
 			wg.Add(1)
-			go r.Output.UpdateOutput(intermediateReducedMap, &wg)
+			go r.Output.UpdateOutput(intermediateReducedSum, &wg)
 
 			// delete all messages from queue
 			wg.Add(1)
@@ -128,8 +124,8 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 			checkpointData.LastCheckpoint++
 			processedMessagesWithoutCheckpoint = 0
 			processedMessagesDeleteInfo = make([]sqsTypes.DeleteMessageBatchRequestEntry, lambdas.MaxMessagesWithoutCheckpoint)
-			intermediateReducedMap = make(aggregators.MapSum)
-			r.Dedupe.WriteMap = lambdas.InitDedupeMap()
+			intermediateReducedSum = aggregators.Sum(0)
+			r.DedupeSimple.WriteMap = lambdas.InitDedupeSimpleMap()
 		}
 
 		// call sqs receive messages
@@ -150,54 +146,25 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 			}
 
 			// get message attributes
-			currentMapID := message.MessageAttributes[lambdas.MapIDAttribute].StringValue
-			currentBatchID, err := strconv.Atoi(*message.MessageAttributes[lambdas.BatchIDAttribute].StringValue)
-			if err != nil {
-				reducerLogger.WithError(err).Error("Error getting message batch ID")
-				return err
-			}
-			currentMessageID, err := strconv.Atoi(*message.MessageAttributes[lambdas.MessageIDAttribute].StringValue)
-			if err != nil {
-				reducerLogger.WithError(err).Error("Error getting message ID")
-				return err
-			}
+			currentMessageID := *message.MessageAttributes[lambdas.MessageIDAttribute].StringValue
 
 			// check if message has already been processed
-			if exists := r.Dedupe.BatchExists(*currentMapID, currentBatchID); exists {
-				if r.Dedupe.IsBatchComplete(*currentMapID, currentBatchID) {
-					// ignore as it is a duplicated message
-					continue
+			if !r.DedupeSimple.IsMessageProcessed(currentMessageID) {
+
+				// process message
+				if err := intermediateReducedSum.Reduce(message.Body); err != nil {
+					reducerLogger.WithError(err).Error("Error processing message")
+					return err
 				}
 
-				if r.Dedupe.IsMessageProcessed(*currentMapID, currentBatchID, currentMessageID) {
-					// ignore as it is a duplicated message
-					continue
-				}
-
-				// message has not been processed
-				// add processed message to dedupe map
-				r.Dedupe.UpdateMessageProcessed(*currentMapID, currentBatchID, currentMessageID)
-
-				// check if we are done processing batch from map
-				if r.Dedupe.IsBatchComplete(*currentMapID, currentBatchID) {
-					totalProcessedBatches++
-					// delete processed map from dedupe
-					r.Dedupe.DeletedProcessedMessages(*currentMapID, currentBatchID)
-				}
-			} else {
-				// no messages for batch have been processed - init dedupe data for batch
-				r.Dedupe.InitDedupeBatch(*currentMapID, currentBatchID, currentMessageID)
-			}
-
-			// process message
-			if err := intermediateReducedMap.Reduce(message.Body); err != nil {
-				reducerLogger.WithError(err).Error("Error processing message")
-				return err
+				// update dedupe and messages processed count
+				r.DedupeSimple.UpdateMessageProcessed(currentMessageID)
+				totalProcessedMessages++
 			}
 		}
 
 		// check if we are done processing values
-		if totalProcessedBatches == *totalBatchesToProcess {
+		if totalProcessedMessages == *totalMessagesToProcess {
 			break
 		}
 	}
@@ -207,7 +174,7 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 
 	// update output map with reduced intermediate results
 	wg.Add(1)
-	go r.Output.UpdateOutput(intermediateReducedMap, &wg)
+	go r.Output.UpdateOutput(intermediateReducedSum, &wg)
 
 	// delete all messages from queue
 	wg.Add(1)
@@ -215,11 +182,10 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 
 	wg.Wait()
 
-	// write reducer output
-	key := fmt.Sprintf("output/%s", r.ReducerID.String())
-	err = r.WriteReducerOutput(ctx, r.Output, key)
+	// write reducer output to queue
+	err = r.EmitValue(ctx, intermediateReducedSum.Int())
 	if err != nil {
-		reducerLogger.WithError(err).Error("Error writing reducer output")
+		reducerLogger.WithError(err).Error("Error sending reducer output to final reduce queue")
 		return err
 	}
 
