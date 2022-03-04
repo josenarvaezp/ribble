@@ -21,11 +21,15 @@ ADD ./aggregators ./aggregators
 RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_sum ./aggregators/map_sum/main/map_sum.go 
 RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_max ./aggregators/map_max/main/map_max.go 
 RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_min ./aggregators/map_min/main/map_min.go 
+RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/sum ./aggregators/sum/main/sum.go 
+RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/sum_final ./aggregators/sum_final/main/sum_final.go 
 
 # compress
 RUN upx --best --lzma /build/map_sum
 RUN upx --best --lzma /build/map_max
 RUN upx --best --lzma /build/map_min
+RUN upx --best --lzma /build/sum
+RUN upx --best --lzma /build/sum_final
 
 # Build runtime for map sum aggregator
 FROM alpine as map_sum
@@ -47,3 +51,17 @@ FROM alpine as map_min
 COPY --from=build /build/map_min /map_min
 
 ENTRYPOINT [ "/map_min" ]
+
+# Build runtime for sum aggregator
+FROM alpine as sum
+
+COPY --from=build /build/sum /sum
+
+ENTRYPOINT [ "/sum" ]
+
+# Build runtime for final sum aggregator
+FROM alpine as sum_final
+
+COPY --from=build /build/sum_final /sum_final
+
+ENTRYPOINT [ "/sum_final" ]

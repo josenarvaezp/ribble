@@ -138,3 +138,49 @@ func mergeBoolMaps(input, output map[int]bool) map[int]bool {
 
 	return output
 }
+
+// DedupeSimple holds data for the write and read Dedupe simple maps.
+// DedupeSimple is used when we don't need complicated dedupe mechanism
+// for dedupiclation like when we use mappers that output a single value.
+// Note that we use two dedupe maps to avoid write conflicts when saving
+// the dedupe data in the checkpoints while we still read more messages from sqs.
+type DedupeSimple struct {
+	WriteMap DedupeSimpleMap
+	ReadMap  DedupeSimpleMap
+}
+
+// InitDedupe initializes a dedupe struct
+func InitDedupeSimple() *DedupeSimple {
+	return &DedupeSimple{
+		WriteMap: InitDedupeSimpleMap(),
+		ReadMap:  InitDedupeSimpleMap(),
+	}
+}
+
+// IsMessageProcessed returns true if the message has been processed
+func (d *DedupeSimple) IsMessageProcessed(mesageID string) bool {
+	return d.WriteMap[mesageID] || d.ReadMap[mesageID]
+}
+
+// Merge is used to merge the read and write maps into the read map
+func (d *DedupeSimple) Merge() {
+	// update read map with write map values
+	for mapperID, processed := range d.WriteMap {
+		d.ReadMap[mapperID] = processed
+	}
+}
+
+// UpdateMessageProcessed updates the dedupe map to register the
+// given message as registered
+func (d *DedupeSimple) UpdateMessageProcessed(mesageID string) {
+	d.WriteMap[mesageID] = true
+}
+
+// DedupeSimpleMap is used to hold a deduplication map where string is
+// the mapper uuid and bool represents if we have seen the value or not
+type DedupeSimpleMap map[string]bool
+
+// InitDedupeSimpleMap initializes a dedupe simple map
+func InitDedupeSimpleMap() DedupeSimpleMap {
+	return make(map[string]bool)
+}

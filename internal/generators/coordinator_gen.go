@@ -10,12 +10,13 @@ import (
 
 // CoordinatorData defines the data needed for the template
 type CoordinatorData struct {
-	LambdaAggregator string `yaml:"LambdaAggregator,omitempty"`
-	GeneratedFile    string `yaml:"GeneratedFile,omitempty"`
-	Function         string `yaml:"Function,omitempty"`
-	ImageName        string `yaml:"ImageName,omitempty"`
-	ImageTag         string `yaml:"ImageTag,omitempty"`
-	Dockefile        string `yaml:"Dockerfile,omitempty"`
+	LambdaAggregator      string `yaml:"LambdaAggregator,omitempty"`
+	LambdaFinalAggregator string `yaml:"LambdaFinalAggregator,omitempty"`
+	GeneratedFile         string `yaml:"GeneratedFile,omitempty"`
+	Function              string `yaml:"Function,omitempty"`
+	ImageName             string `yaml:"ImageName,omitempty"`
+	ImageTag              string `yaml:"ImageTag,omitempty"`
+	Dockefile             string `yaml:"Dockerfile,omitempty"`
 }
 
 func GetCoordinatorData(jobID string, mapperData *FunctionData) *CoordinatorData {
@@ -39,7 +40,7 @@ func GetCoordinatorData(jobID string, mapperData *FunctionData) *CoordinatorData
 // ExecuteCoordinatorGenerator generates a go file with the auto generated code
 func ExecuteCoordinatorGenerator(jobID string, aggregatorType lambdas.AggregatorType) error {
 	// get string representation of the aggregator function
-	internalAggregator, err := AggregatorTypeToInternalFunction(aggregatorType)
+	coordinatorData, err := AggregatorTypeToCoordinatorData(aggregatorType)
 	if err != nil {
 		return err
 	}
@@ -63,10 +64,18 @@ func ExecuteCoordinatorGenerator(jobID string, aggregatorType lambdas.Aggregator
 	}
 	defer fileWriter.Close()
 
+	// get template depending on the aggregator type used
+	var templateValue string
+	if aggregatorType >= 4 {
+		// it is a single value aggregator
+		templateValue = valueCoordinatorTemplate
+	} else {
+		// it is a map aggregator
+		templateValue = mapCoordinatorTemplate
+	}
+
 	// generate template
-	t := template.Must(template.New("coordinator").Parse(coordinatorTemplate))
-	err = t.Execute(fileWriter, CoordinatorData{
-		LambdaAggregator: internalAggregator,
-	})
+	t := template.Must(template.New("coordinator").Parse(templateValue))
+	err = t.Execute(fileWriter, coordinatorData)
 	return err
 }
