@@ -1,6 +1,11 @@
 package lambdas
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+
+	"github.com/josenarvaezp/displ/pkg/aggregators"
+)
 
 const (
 	// items per batch
@@ -37,4 +42,16 @@ func GetQueueURL(queueName string, region string, accountID string, local bool) 
 	}
 
 	return queueURL
+}
+
+func GetAggregatorType(value aggregators.Aggregator) AggregatorType {
+	aggregatorReflectType := reflect.TypeOf(value)
+	switch aggregatorReflectType.Name() {
+	case "MapAggregator":
+		return MapAggregator
+	case "Sum":
+		return SumAggregator
+	default:
+		return InvalidAggregator
+	}
 }

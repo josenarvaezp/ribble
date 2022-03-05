@@ -12,15 +12,11 @@ func AggregatorTypeToCoordinatorData(aggregatorType lambdas.AggregatorType) (*Co
 	coordinatorData := &CoordinatorData{}
 
 	switch aggregatorType {
-	case lambdas.MapSumAggregator:
-		coordinatorData.LambdaAggregator = lambdas.ECRAggregatorMapSum
-	case lambdas.MapMaxAggregator:
-		coordinatorData.LambdaAggregator = lambdas.ECRAggregatorMapMax
-	case lambdas.MapMinAggregator:
-		coordinatorData.LambdaAggregator = lambdas.ECRAggregatorMapMin
+	case lambdas.MapAggregator:
+		coordinatorData.LambdaAggregator = lambdas.ECRMapAggregator
 	case lambdas.SumAggregator:
-		coordinatorData.LambdaAggregator = lambdas.ECRAggregatorSum
-		coordinatorData.LambdaFinalAggregator = lambdas.ECRAggregatorSumFinal
+		coordinatorData.LambdaAggregator = lambdas.ECRMapAggregator
+		// coordinatorData.LambdaFinalAggregator = lambdas.ECRAggregatorSumFinal
 	default:
 		return nil, errors.New("Aggregator type is not valid")
 	}
