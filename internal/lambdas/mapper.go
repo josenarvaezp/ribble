@@ -170,21 +170,32 @@ func (m *Mapper) EmitMap(
 	batchMetadata map[int]int64,
 ) error {
 	// keep dictionary of batches to allow sending keys in batches
-	batches := make(map[int][]MapMessage)
+	batches := make(map[int][]aggregators.ReduceMessage)
 
 	// iterate through the output map and send values in batches
 	for key, value := range outputMap {
 		// get partition queue from key
 		partitionQueue := m.getQueuePartition(key)
 
+		aggregatorType := GetAggregatorType(value)
+
 		// add value to batch
+		mapMessage := aggregators.ReduceMessage{
+			Key:  key,
+			Type: int64(aggregatorType),
+		}
+
+		if aggregatorType == AvgAggregator {
+			castAvg := value.(*aggregators.Avg)
+			mapMessage.Value = castAvg.GetSum()
+			mapMessage.Count = castAvg.GetCount()
+		} else {
+			mapMessage.Value = value.ToNum()
+		}
+
 		batches[partitionQueue] = append(
 			batches[partitionQueue],
-			MapMessage{
-				Key:   key,
-				Value: value.ToNum(),
-				Type:  float64(GetAggregatorType(value)),
-			},
+			mapMessage,
 		)
 
 		// flush batch if it has maximum items
@@ -215,9 +226,9 @@ func (m *Mapper) EmitMap(
 		// be much simpler given that a reducer will only need to know the number of
 		// batches that the mapper sent rather that the number of batches and for
 		// each batch how many items
-		valuesToAppend := make([]MapMessage, MaxItemsPerBatch-len(valuesInBatch))
+		valuesToAppend := make([]aggregators.ReduceMessage, MaxItemsPerBatch-len(valuesInBatch))
 		for i := 0; i < len(valuesToAppend); i++ {
-			valuesToAppend[i] = MapMessage{
+			valuesToAppend[i] = aggregators.ReduceMessage{
 				EmptyVal: true,
 			}
 		}
@@ -243,7 +254,7 @@ func (m *Mapper) EmitMap(
 }
 
 // sendBatch sends the specified batch to the specified queue
-func (m *Mapper) sendBatch(ctx context.Context, partitionQueue int, batchID int, batch []MapMessage) error {
+func (m *Mapper) sendBatch(ctx context.Context, partitionQueue int, batchID int, batch []aggregators.ReduceMessage) error {
 	// convert batch to message entries
 	messsageEntries := make([]types.SendMessageBatchRequestEntry, len(batch))
 	for i, message := range batch {

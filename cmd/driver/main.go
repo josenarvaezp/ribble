@@ -134,6 +134,8 @@ var uploadCmd = &cobra.Command{
 	Short: "Upload the resources needed for the processing job",
 	Long:  `Upload the resources needed for the processing job`,
 	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("Creating resources...")
+
 		ctx := context.Background()
 
 		// get verbosity for logs
@@ -192,15 +194,22 @@ var uploadCmd = &cobra.Command{
 			return
 		}
 
+		// create dlq SQS for the mappers and coordinator
+		dlqArn, err := jobDriver.CreateLambdaDLQ(ctx)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error creating the dead-letter queue for the job mappers")
+			return
+		}
+
 		// create lambda mapper function
-		err = jobDriver.CreateMapperLambdaFunction(ctx)
+		err = jobDriver.CreateMapperLambdaFunction(ctx, dlqArn)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating mapper lambda function")
 			return
 		}
 
 		// create lambda coordinator function
-		err = jobDriver.CreateCoordinatorLambdaFunction(ctx)
+		err = jobDriver.CreateCoordinatorLambdaFunction(ctx, dlqArn)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating coordinator lambda function")
 			return
@@ -393,8 +402,7 @@ var setupCmd = &cobra.Command{
 
 		// create lambda aggregator function
 		fmt.Println("Creating aggregator lambda functions...")
-
-		queueARN, err := jobDriver.CreateAggregatorsDQL(ctx)
+		queueARN, err := jobDriver.CreateAggregatorsDLQ(ctx)
 		if err != nil {
 			logrus.WithError(err).Error("Error uploading aggregator images")
 			return

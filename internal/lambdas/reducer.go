@@ -27,6 +27,9 @@ const (
 	InvalidAggregator AggregatorType = iota
 	MapAggregator
 	SumAggregator
+	MaxAggregator
+	MinAggregator
+	AvgAggregator
 )
 
 const (

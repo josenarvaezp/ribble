@@ -85,8 +85,6 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 		WaitTimeSeconds: int32(5),
 	}
 
-	// countMap := make(map[string]int)
-
 	// recieve messages until we are done processing all queue
 	for true {
 		if processedMessagesWithoutCheckpoint == lambdas.MaxMessagesBeforeCheckpointComplete && checkpointData.LastCheckpoint != 1 {
@@ -195,12 +193,6 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 				return err
 			}
 
-			// // add count if it is an Avg aggregator
-			// if reduceMessage.Type == 5 { // TODO: get correct Avg type
-			// 	// add count for average
-			// 	countMap[reduceMessage.Key] = countMap[reduceMessage.Key] + 1
-			// }
-
 			if err := intermediateReducedMap.Reduce(reduceMessage); err != nil {
 				reducerLogger.WithError(err).Error("Error processing message")
 				return err
@@ -212,11 +204,6 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 			break
 		}
 	}
-
-	// // perform averages
-	// for key, totalCount := range countMap {
-	// 	intermediateReducedMap[key] = Avg(intermediateReducedMap[key].ToNum() / float64(totalCount))
-	// }
 
 	// wait in case reducers is saving checkpoint in the background
 	wg.Wait()

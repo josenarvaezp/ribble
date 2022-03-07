@@ -40,9 +40,46 @@ func (d *Driver) CreateJobBucket(ctx context.Context) error {
 }
 
 // CreateDQL creates the dead-letter queue for the service
-func (d *Driver) CreateAggregatorsDQL(ctx context.Context) (*string, error) {
+func (d *Driver) CreateAggregatorsDLQ(ctx context.Context) (*string, error) {
+	// create final reduce queue
+	finalQueueName := fmt.Sprintf("%s-%s", d.JobID.String(), "final-aggregator")
+
+	_, err := d.QueuesAPI.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: &finalQueueName,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	// create dead-letter queue
 	dlqName := "ribble_aggregators_dlq"
+	dlqParams := &sqs.CreateQueueInput{
+		QueueName: &dlqName,
+	}
+
+	dlqOutput, err := d.QueuesAPI.CreateQueue(ctx, dlqParams)
+	if err != nil {
+		return nil, err
+	}
+
+	// create policy and convert it to json
+	getQueueAttributesParams := &sqs.GetQueueAttributesInput{
+		QueueUrl:       dlqOutput.QueueUrl,
+		AttributeNames: []types.QueueAttributeName{types.QueueAttributeNameQueueArn},
+	}
+	attributes, err := d.QueuesAPI.GetQueueAttributes(ctx, getQueueAttributesParams)
+	if err != nil {
+		return nil, err
+	}
+
+	dlqARN := attributes.Attributes["QueueArn"]
+	return &dlqARN, err
+}
+
+// CreateDQL creates the dead-letter queue for the service
+func (d *Driver) CreateLambdaDLQ(ctx context.Context) (*string, error) {
+	// create dead-letter queue
+	dlqName := fmt.Sprintf("%s-%s", d.JobID.String(), "lambda-dlq")
 	dlqParams := &sqs.CreateQueueInput{
 		QueueName: &dlqName,
 	}
@@ -69,18 +106,8 @@ func (d *Driver) CreateAggregatorsDQL(ctx context.Context) (*string, error) {
 // CreateQueues creates numQueues. This queues will be used by the framework
 // to send data from the mappers to the reducers.
 func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
-	// create final reduce queue
-	finalQueueName := fmt.Sprintf("%s-%s", d.JobID.String(), "final-aggregator")
-
-	_, err := d.QueuesAPI.CreateQueue(ctx, &sqs.CreateQueueInput{
-		QueueName: &finalQueueName,
-	})
-	if err != nil {
-		return err
-	}
-
 	// create dead-letter queue
-	dlqName := fmt.Sprintf("%s-%s", d.JobID.String(), "dlq")
+	dlqName := fmt.Sprintf("%s-%s", d.JobID.String(), "messages-dlq")
 	dlqParams := &sqs.CreateQueueInput{
 		QueueName: &dlqName,
 	}

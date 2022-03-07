@@ -120,7 +120,7 @@ func (d *Driver) UploadJobImages(ctx context.Context) error {
 	return nil
 }
 
-func (d *Driver) CreateMapperLambdaFunction(ctx context.Context) error {
+func (d *Driver) CreateMapperLambdaFunction(ctx context.Context, lambdaDlqArn *string) error {
 	imageURI := fmt.Sprintf(
 		"%s.dkr.ecr.%s.amazonaws.com/%s:%s",
 		d.Config.AccountID,
@@ -130,8 +130,6 @@ func (d *Driver) CreateMapperLambdaFunction(ctx context.Context) error {
 	)
 	functionDescription := fmt.Sprintf("Ribble function for %s", d.BuildData.MapperData.Function)
 	functionTimeout := int32(900)
-	dlqName := fmt.Sprintf("%s-%s", d.JobID.String(), "dlq")
-	dlqArn := fmt.Sprintf("arn:aws:sqs:%s:%s:%s", d.Config.Region, d.Config.AccountID, dlqName)
 	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
 	functionName := fmt.Sprintf("%s_%s", d.BuildData.MapperData.Function, d.JobID.String())
 
@@ -142,7 +140,7 @@ func (d *Driver) CreateMapperLambdaFunction(ctx context.Context) error {
 		FunctionName: &functionName,
 		Role:         &ribbleRoleArn,
 		DeadLetterConfig: &types.DeadLetterConfig{
-			TargetArn: &dlqArn,
+			TargetArn: lambdaDlqArn,
 		},
 		Description: &functionDescription,
 		PackageType: types.PackageTypeImage,
@@ -153,7 +151,7 @@ func (d *Driver) CreateMapperLambdaFunction(ctx context.Context) error {
 	return err
 }
 
-func (d *Driver) CreateCoordinatorLambdaFunction(ctx context.Context) error {
+func (d *Driver) CreateCoordinatorLambdaFunction(ctx context.Context, lambdaDlqArn *string) error {
 	imageURI := fmt.Sprintf(
 		"%s.dkr.ecr.%s.amazonaws.com/%s:%s",
 		d.Config.AccountID,
@@ -163,8 +161,6 @@ func (d *Driver) CreateCoordinatorLambdaFunction(ctx context.Context) error {
 	)
 	functionDescription := fmt.Sprintf("Ribble function for %s", d.BuildData.CoordinatorData.Function)
 	functionTimeout := int32(900)
-	dlqName := fmt.Sprintf("%s-%s", d.JobID.String(), "dlq")
-	dlqArn := fmt.Sprintf("arn:aws:sqs:%s:%s:%s", d.Config.Region, d.Config.AccountID, dlqName)
 	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
 	functionName := fmt.Sprintf("%s_%s", d.BuildData.CoordinatorData.Function, d.JobID.String())
 
@@ -175,7 +171,7 @@ func (d *Driver) CreateCoordinatorLambdaFunction(ctx context.Context) error {
 		FunctionName: &functionName,
 		Role:         &ribbleRoleArn,
 		DeadLetterConfig: &types.DeadLetterConfig{
-			TargetArn: &dlqArn,
+			TargetArn: lambdaDlqArn,
 		},
 		Description: &functionDescription,
 		PackageType: types.PackageTypeImage,
