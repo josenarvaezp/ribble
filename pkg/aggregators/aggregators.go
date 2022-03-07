@@ -100,8 +100,7 @@ func (ma MapAggregator) ToNum() float64 {
 func (ma MapAggregator) AddSum(key string, value float64) error {
 	currentSum, ok := ma[key]
 	if !ok {
-		sum := Sum(value)
-		ma[key] = &sum
+		ma[key] = &Sum{Sum: value}
 	} else {
 		// cast intermediate map
 		castSum, ok := currentSum.(*Sum)
@@ -109,8 +108,7 @@ func (ma MapAggregator) AddSum(key string, value float64) error {
 			return errors.New("Mixed aggregators used")
 		}
 
-		sum := Sum(castSum.ToNum() + currentSum.ToNum())
-		ma[key] = &sum
+		castSum.Add(value)
 	}
 
 	return nil
@@ -121,8 +119,7 @@ func (ma MapAggregator) AddSum(key string, value float64) error {
 func (ma MapAggregator) AddMax(key string, value float64) error {
 	currentMax, ok := ma[key]
 	if !ok {
-		max := Max(value)
-		ma[key] = &max
+		ma[key] = InitMax(value)
 	} else {
 		// cast intermediate map
 		castMax, ok := currentMax.(*Max)
@@ -132,8 +129,7 @@ func (ma MapAggregator) AddMax(key string, value float64) error {
 
 		if castMax.ToNum() < value {
 			// update new max
-			max := Max(value)
-			ma[key] = &max
+			castMax.Max = value
 		}
 	}
 
@@ -145,8 +141,7 @@ func (ma MapAggregator) AddMax(key string, value float64) error {
 func (ma MapAggregator) AddMin(key string, value float64) error {
 	currentMin, ok := ma[key]
 	if !ok {
-		min := Min(value)
-		ma[key] = &min
+		ma[key] = InitMin(value)
 	} else {
 		// cast intermediate map
 		castMax, ok := currentMin.(*Min)
@@ -156,8 +151,7 @@ func (ma MapAggregator) AddMin(key string, value float64) error {
 
 		if castMax.ToNum() > value {
 			// update new min
-			min := Min(value)
-			ma[key] = &min
+			castMax.Min = value
 		}
 	}
 
@@ -194,23 +188,25 @@ func (ma MapAggregator) AddAvg(key string, value float64) error {
 // -------------------
 
 // Sum aggregates values emitted by adding them up
-type Sum float64
+type Sum struct {
+	Sum float64 `json:",string,omitempty"`
+}
 
 // InitSum initializes a Sum value to 0
 func InitSum(value float64) *Sum {
-	sum := Sum(value)
-	return &sum
+	return &Sum{
+		Sum: value,
+	}
 }
 
 // Add updates the sum by adding the new value
 func (s *Sum) Add(value float64) {
-	newSum := Sum(s.ToNum() + value)
-	s = &newSum
+	s.Sum = s.Sum + value
 }
 
 // ToNum converts the Sum value to a float
 func (s *Sum) ToNum() float64 {
-	return float64(*s)
+	return s.Sum
 }
 
 func (ma *Sum) Type() AggregatorType {
@@ -219,9 +215,7 @@ func (ma *Sum) Type() AggregatorType {
 
 // Reduce aggregates values emitted by adding them up
 func (s *Sum) Reduce(message *ReduceMessage) error {
-	newVal := Sum(s.ToNum() + message.Value)
-	s = &newVal
-
+	s.Add(message.Value)
 	return nil
 }
 
@@ -234,8 +228,7 @@ func (s *Sum) UpdateOutput(intermediateValue interface{}, wg *sync.WaitGroup) er
 	}
 
 	// update output map values
-	newVal := Sum(s.ToNum() + intermediateValueCast.ToNum())
-	s = &newVal
+	s.Add(intermediateValueCast.Sum)
 
 	return nil
 }
@@ -246,17 +239,18 @@ func (s *Sum) UpdateOutput(intermediateValue interface{}, wg *sync.WaitGroup) er
 
 // MapMax aggregates values from the same key
 // by getting the max value of the given key
-type Max float64
+type Max struct {
+	Max float64 `json:",string,omitempty"`
+}
 
 // InitMax initializes a Max value to the minimum
 // value a float can take
 func InitMax(value float64) *Max {
-	max := Max(value)
-	return &max
+	return &Max{Max: value}
 }
 
 func (m *Max) ToNum() float64 {
-	return float64(*m)
+	return m.Max
 }
 
 func (ma *Max) Type() AggregatorType {
@@ -267,8 +261,7 @@ func (ma *Max) Type() AggregatorType {
 func (m *Max) Reduce(message *ReduceMessage) error {
 	if m.ToNum() < message.Value {
 		// update new max
-		newMax := Max(message.Value)
-		m = &newMax
+		m.Max = message.Value
 	}
 
 	return nil
@@ -285,7 +278,7 @@ func (m *Max) UpdateOutput(intermediateValue interface{}, wg *sync.WaitGroup) er
 	// update max
 	if m.ToNum() < intermediateValueCast.ToNum() {
 		// update new max
-		m = intermediateValueCast
+		m.Max = intermediateValueCast.ToNum()
 	}
 
 	return nil
@@ -297,17 +290,18 @@ func (m *Max) UpdateOutput(intermediateValue interface{}, wg *sync.WaitGroup) er
 
 // Min aggregates values from the same key
 // by getting the max value of the given key
-type Min float64
+type Min struct {
+	Min float64 `json:",string,omitempty"`
+}
 
 // InitMin initializes a Max value to the minimum
 // value a float can take
 func InitMin(value float64) *Min {
-	min := Min(value)
-	return &min
+	return &Min{Min: value}
 }
 
 func (m *Min) ToNum() float64 {
-	return float64(*m)
+	return m.Min
 }
 
 func (ma *Min) Type() AggregatorType {
@@ -318,8 +312,7 @@ func (ma *Min) Type() AggregatorType {
 func (m *Min) Reduce(message *ReduceMessage) error {
 	if m.ToNum() > message.Value {
 		// update new max
-		newMin := Min(message.Value)
-		m = &newMin
+		m.Min = message.Value
 	}
 
 	return nil
@@ -336,7 +329,7 @@ func (m *Min) UpdateOutput(intermediateValue interface{}, wg *sync.WaitGroup) er
 	// update max
 	if m.ToNum() > intermediateValueCast.ToNum() {
 		// update new min
-		m = intermediateValueCast
+		m.Min = intermediateValueCast.ToNum()
 	}
 
 	return nil
