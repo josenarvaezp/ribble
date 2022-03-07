@@ -66,7 +66,7 @@ func ExecuteCoordinatorGenerator(jobID string, aggregatorType lambdas.Aggregator
 
 	// get template depending on the aggregator type used
 	var templateValue string
-	if aggregatorType >= 4 {
+	if aggregatorType == lambdas.SumAggregator {
 		// it is a single value aggregator
 		templateValue = valueCoordinatorTemplate
 	} else {

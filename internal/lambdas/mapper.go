@@ -166,24 +166,36 @@ func (m *Mapper) DownloadFile(object objectstore.ObjectRange) (*string, error) {
 // EmitMapSum sends the output map in batches to the queues
 func (m *Mapper) EmitMap(
 	ctx context.Context,
-	outputMap map[string]int,
+	outputMap aggregators.MapAggregator,
 	batchMetadata map[int]int64,
 ) error {
 	// keep dictionary of batches to allow sending keys in batches
-	batches := make(map[int][]MapInt)
+	batches := make(map[int][]aggregators.ReduceMessage)
 
 	// iterate through the output map and send values in batches
 	for key, value := range outputMap {
 		// get partition queue from key
 		partitionQueue := m.getQueuePartition(key)
 
+		aggregatorType := GetAggregatorType(value)
+
 		// add value to batch
+		mapMessage := aggregators.ReduceMessage{
+			Key:  key,
+			Type: int64(aggregatorType),
+		}
+
+		if aggregatorType == AvgAggregator {
+			castAvg := value.(*aggregators.Avg)
+			mapMessage.Value = castAvg.GetSum()
+			mapMessage.Count = castAvg.GetCount()
+		} else {
+			mapMessage.Value = value.ToNum()
+		}
+
 		batches[partitionQueue] = append(
 			batches[partitionQueue],
-			MapInt{
-				Key:   key,
-				Value: value,
-			},
+			mapMessage,
 		)
 
 		// flush batch if it has maximum items
@@ -214,9 +226,9 @@ func (m *Mapper) EmitMap(
 		// be much simpler given that a reducer will only need to know the number of
 		// batches that the mapper sent rather that the number of batches and for
 		// each batch how many items
-		valuesToAppend := make([]MapInt, MaxItemsPerBatch-len(valuesInBatch))
+		valuesToAppend := make([]aggregators.ReduceMessage, MaxItemsPerBatch-len(valuesInBatch))
 		for i := 0; i < len(valuesToAppend); i++ {
-			valuesToAppend[i] = MapInt{
+			valuesToAppend[i] = aggregators.ReduceMessage{
 				EmptyVal: true,
 			}
 		}
@@ -242,7 +254,7 @@ func (m *Mapper) EmitMap(
 }
 
 // sendBatch sends the specified batch to the specified queue
-func (m *Mapper) sendBatch(ctx context.Context, partitionQueue int, batchID int, batch []MapInt) error {
+func (m *Mapper) sendBatch(ctx context.Context, partitionQueue int, batchID int, batch []aggregators.ReduceMessage) error {
 	// convert batch to message entries
 	messsageEntries := make([]types.SendMessageBatchRequestEntry, len(batch))
 	for i, message := range batch {
@@ -324,39 +336,39 @@ func (m *Mapper) GetRandomQueuePartition() int {
 	return randomWithSeed.Intn(int(m.NumQueues) + 1)
 }
 
-// EmitValues sends the data (a single value) produced by a mapper
-func (m *Mapper) EmitValue(ctx context.Context, partition int, value int) error {
-	// use map id as message id as only one value per map is emited
-	messageID := m.MapID.String()
+// // EmitValues sends the data (a single value) produced by a mapper
+// func (m *Mapper) EmitValue(ctx context.Context, partition int, value int) error {
+// 	// use map id as message id as only one value per map is emited
+// 	messageID := m.MapID.String()
 
-	// encode map input into JSON
-	p, err := json.Marshal(MapInt{
-		Value: value,
-	})
-	if err != nil {
-		return err
-	}
-	messageJSONString := string(p)
+// 	// encode map input into JSON
+// 	p, err := json.Marshal(MapMessage{
+// 		Value: value,
+// 	})
+// 	if err != nil {
+// 		return err
+// 	}
+// 	messageJSONString := string(p)
 
-	queueName := fmt.Sprintf("%s-%d", m.JobID.String(), partition)
-	queueURL := GetQueueURL(queueName, m.Region, m.AccountID, m.local)
-	params := &sqs.SendMessageInput{
-		MessageBody: &messageJSONString,
-		MessageAttributes: map[string]types.MessageAttributeValue{
-			MessageIDAttribute: {
-				DataType:    &stringDataType,
-				StringValue: &messageID,
-			},
-		},
-		QueueUrl: &queueURL,
-	}
-	_, err = m.QueuesAPI.SendMessage(ctx, params)
-	if err != nil {
-		return err
-	}
+// 	queueName := fmt.Sprintf("%s-%d", m.JobID.String(), partition)
+// 	queueURL := GetQueueURL(queueName, m.Region, m.AccountID, m.local)
+// 	params := &sqs.SendMessageInput{
+// 		MessageBody: &messageJSONString,
+// 		MessageAttributes: map[string]types.MessageAttributeValue{
+// 			MessageIDAttribute: {
+// 				DataType:    &stringDataType,
+// 				StringValue: &messageID,
+// 			},
+// 		},
+// 		QueueUrl: &queueURL,
+// 	}
+// 	_, err = m.QueuesAPI.SendMessage(ctx, params)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // SendMetadata sends the metadata to the metadata queues for mappers
 // that work on single values
@@ -476,18 +488,6 @@ func (m *Mapper) SendBatchMetadata(ctx context.Context, batchMetadata map[int]in
 	return nil
 }
 
-func RunMapSumMapper(filename string, userMap func(filename string) aggregators.MapSum) map[string]int {
-	return userMap(filename)
-}
-
-func RunMapMaxMapper(filename string, userMap func(filename string) aggregators.MapMax) map[string]int {
-	return userMap(filename)
-}
-
-func RunMapMinMapper(filename string, userMap func(filename string) aggregators.MapMin) map[string]int {
-	return userMap(filename)
-}
-
-func RunSumMapper(filename string, userMap func(filename string) aggregators.Sum) aggregators.Sum {
+func RunMapAggregator(filename string, userMap func(filename string) aggregators.MapAggregator) aggregators.MapAggregator {
 	return userMap(filename)
 }

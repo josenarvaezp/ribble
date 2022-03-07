@@ -11,8 +11,8 @@ import (
 	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
-// NewMapSumReducer initializes a new reducer with its required clients
-func NewMapSumReducer(
+// NewMapReducer initializes a new reducer with its required clients
+func NewMapReducer(
 	local bool,
 ) (*Reducer, error) {
 	var cfg *aws.Config
@@ -25,7 +25,7 @@ func NewMapSumReducer(
 	reducer := &Reducer{
 		Region: region,
 		Local:  local,
-		Output: make(aggregators.MapSum),
+		Output: make(aggregators.MapAggregator),
 		Dedupe: InitDedupe(),
 	}
 

@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	sqsTypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/objectstore"
@@ -26,29 +25,26 @@ type AggregatorType int64
 const (
 	// Aggregator types
 	InvalidAggregator AggregatorType = iota
-	MapSumAggregator
-	MapMaxAggregator
-	MapMinAggregator
+	MapAggregator
 	SumAggregator
+	MaxAggregator
+	MinAggregator
+	AvgAggregator
 )
 
 const (
 	// ECR repo aggregator names
-	ECRAggregatorMapSum   string = "map_sum_aggregator"
-	ECRAggregatorMapMax   string = "map_max_aggregator"
-	ECRAggregatorMapMin   string = "map_min_aggregator"
-	ECRAggregatorSum      string = "sum_aggregator"
-	ECRAggregatorSumFinal string = "sum_final_aggregator"
+	ECRMapAggregator string = "map_aggregator"
+	ECRSumAggregator string = "sum_aggregator"
+	// ECRAggregatorSumFinal string = "sum_final_aggregator"
 )
 
 var (
 	// ECR repo aggregator names as a list
 	ECRAggregators []string = []string{
-		ECRAggregatorMapSum,
-		ECRAggregatorMapMax,
-		ECRAggregatorMapMin,
-		ECRAggregatorSum,
-		ECRAggregatorSumFinal,
+		ECRMapAggregator,
+		// ECRSumAggregator,
+		// ECRAggregatorSumFinal,
 	}
 )
 
@@ -234,40 +230,40 @@ func (r *Reducer) GetNumberOfMessagesToProcess(ctx context.Context) (*int, error
 	return &totalNumOfMessagesToProcess, nil
 }
 
-// EmitValues sends the data (a single value) produced by a reducer to the
-// final reduce queue
-func (r *Reducer) EmitValue(ctx context.Context, value int) error {
-	// use map id as message id as only one value per map is emited
-	reducerID := r.ReducerID.String()
+// // EmitValues sends the data (a single value) produced by a reducer to the
+// // final reduce queue
+// func (r *Reducer) EmitValue(ctx context.Context, value int) error {
+// 	// use map id as message id as only one value per map is emited
+// 	reducerID := r.ReducerID.String()
 
-	// encode input into JSON
-	p, err := json.Marshal(MapInt{
-		Value: value,
-	})
-	if err != nil {
-		return err
-	}
-	messageJSONString := string(p)
+// 	// encode input into JSON
+// 	p, err := json.Marshal(MapInt{
+// 		Value: value,
+// 	})
+// 	if err != nil {
+// 		return err
+// 	}
+// 	messageJSONString := string(p)
 
-	queueName := fmt.Sprintf("%s-%s", r.JobID.String(), "final-aggregator")
-	queueURL := GetQueueURL(queueName, r.Region, r.AccountID, false)
-	params := &sqs.SendMessageInput{
-		MessageBody: &messageJSONString,
-		MessageAttributes: map[string]types.MessageAttributeValue{
-			MessageIDAttribute: {
-				DataType:    &stringDataType,
-				StringValue: &reducerID,
-			},
-		},
-		QueueUrl: &queueURL,
-	}
-	_, err = r.QueuesAPI.SendMessage(ctx, params)
-	if err != nil {
-		return err
-	}
+// 	queueName := fmt.Sprintf("%s-%s", r.JobID.String(), "final-aggregator")
+// 	queueURL := GetQueueURL(queueName, r.Region, r.AccountID, false)
+// 	params := &sqs.SendMessageInput{
+// 		MessageBody: &messageJSONString,
+// 		MessageAttributes: map[string]types.MessageAttributeValue{
+// 			MessageIDAttribute: {
+// 				DataType:    &stringDataType,
+// 				StringValue: &reducerID,
+// 			},
+// 		},
+// 		QueueUrl: &queueURL,
+// 	}
+// 	_, err = r.QueuesAPI.SendMessage(ctx, params)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // SaveIntermediateOutput saves the intermediate output into an S3 object
 func (r *Reducer) SaveIntermediateOutput(
