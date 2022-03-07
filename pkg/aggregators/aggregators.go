@@ -348,9 +348,9 @@ func (m *Min) UpdateOutput(intermediateValue interface{}, wg *sync.WaitGroup) er
 
 // Avg aggregates values emitted by performing their average
 type Avg struct {
-	Avg   float64 `json:"avg,omitempty"`
-	Sum   float64
-	Count int
+	Avg   float64 `json:",string,omitempty"`
+	Sum   float64 `json:"-"`
+	Count int     `json:"-"`
 }
 
 func (a *Avg) GetSum() float64 {
