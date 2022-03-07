@@ -9,7 +9,7 @@ import (
 	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
-func WordCount(filename string) aggregators.MapSum {
+func WordCount(filename string) aggregators.MapAggregator {
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Fatal(err)
@@ -18,12 +18,14 @@ func WordCount(filename string) aggregators.MapSum {
 
 	scanner := bufio.NewScanner(file)
 
-	output := make(aggregators.MapSum)
+	// initialize map
+	output := make(aggregators.MapAggregator)
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		words := strings.Fields(line)
 		for _, word := range words {
-			output[word] = output[word] + 1
+			output.AddSum(word, 1)
 		}
 	}
 

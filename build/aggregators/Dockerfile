@@ -18,50 +18,32 @@ ADD ./internal ./internal
 ADD ./aggregators ./aggregators
 
 # build aggregators
-RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_sum ./aggregators/map_sum/main/map_sum.go 
-RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_max ./aggregators/map_max/main/map_max.go 
-RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_min ./aggregators/map_min/main/map_min.go 
-RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/sum ./aggregators/sum/main/sum.go 
-RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/sum_final ./aggregators/sum_final/main/sum_final.go 
+RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_aggregator ./aggregators/map_aggregator/main/map_aggregator.go 
+# RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/sum ./aggregators/sum/main/sum.go 
+# RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/sum_final ./aggregators/sum_final/main/sum_final.go 
 
 # compress
-RUN upx --best --lzma /build/map_sum
-RUN upx --best --lzma /build/map_max
-RUN upx --best --lzma /build/map_min
-RUN upx --best --lzma /build/sum
-RUN upx --best --lzma /build/sum_final
+RUN upx --best --lzma /build/map_aggregator
+# RUN upx --best --lzma /build/sum
+# RUN upx --best --lzma /build/sum_final
 
-# Build runtime for map sum aggregator
-FROM alpine as map_sum
+# Build runtime for map aggregator
+FROM alpine as map_aggregator
 
-COPY --from=build /build/map_sum /map_sum
+COPY --from=build /build/map_aggregator /map_aggregator
 
-ENTRYPOINT [ "/map_sum" ]
+ENTRYPOINT [ "/map_aggregator" ]
 
-# Build runtime for map max aggregator
-FROM alpine as map_max
+# # Build runtime for sum aggregator
+# FROM alpine as sum
 
-COPY --from=build /build/map_max /map_max
+# COPY --from=build /build/sum /sum
 
-ENTRYPOINT [ "/map_max" ]
+# ENTRYPOINT [ "/sum" ]
 
-# Build runtime for map min aggregator
-FROM alpine as map_min
+# # Build runtime for final sum aggregator
+# FROM alpine as sum_final
 
-COPY --from=build /build/map_min /map_min
+# COPY --from=build /build/sum_final /sum_final
 
-ENTRYPOINT [ "/map_min" ]
-
-# Build runtime for sum aggregator
-FROM alpine as sum
-
-COPY --from=build /build/sum /sum
-
-ENTRYPOINT [ "/sum" ]
-
-# Build runtime for final sum aggregator
-FROM alpine as sum_final
-
-COPY --from=build /build/sum_final /sum_final
-
-ENTRYPOINT [ "/sum_final" ]
+# ENTRYPOINT [ "/sum_final" ]
