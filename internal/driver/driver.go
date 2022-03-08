@@ -117,7 +117,6 @@ func NewDriver(jobID uuid.UUID, conf *config.Config) (*Driver, error) {
 		if err != nil {
 			return nil, err
 		}
-		driver.Config.AccountID = "000000000000"
 	} else {
 		// Load the configuration using the aws config file
 		cfg, err = config.InitCfg(driver.Config.Region)

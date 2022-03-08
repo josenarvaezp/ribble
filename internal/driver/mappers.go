@@ -28,7 +28,7 @@ const (
 // GenerateMappings generates batches of input data. If logicalSplit is true
 // it genererates logical splits (currently only EOL splits are supportes), otherwise
 // the mappings are generetated one per file
-func (d *Driver) GenerateMappings(ctx context.Context, logicalSplit bool) ([]*lambdas.Mapping, error) {
+func (d *Driver) GenerateMappings(ctx context.Context) ([]*lambdas.Mapping, error) {
 	// init mappings
 	mappings := []*lambdas.Mapping{}
 	firstMapping := lambdas.NewMapping()
@@ -69,7 +69,7 @@ func (d *Driver) GenerateMappings(ctx context.Context, logicalSplit bool) ([]*la
 			var partialMappings []*lambdas.Mapping
 			var mappingErr error
 
-			if logicalSplit {
+			if d.Config.LogicalSplit {
 				partialMappings, mappingErr = d.generateMappingsForPartialObjects(objects, lastMapping)
 				if mappingErr != nil {
 					return nil, err
@@ -206,7 +206,7 @@ func (d *Driver) generateMappingsForPartialObjects(objects []objectstore.Object,
 		availableSpace := CHUNK_SIZE - partialMappings[currentMapping].Size
 
 		// split object to fit the current mapping
-		splitObjectWithRange, err := d.split(context.Background(), object, 0, availableSpace)
+		splitObjectWithRange, err := d.split(context.Background(), object, 1, availableSpace)
 		if err != nil {
 			return nil, err
 		}

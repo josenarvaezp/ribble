@@ -92,7 +92,7 @@ func NewMapper(
 
 	// create config
 	if local {
-		cfg, err = config.InitLocalLambdaCfg()
+		cfg, err = config.InitLocalCfg()
 		if err != nil {
 			return nil, err
 		}
@@ -122,11 +122,16 @@ func NewMapper(
 // gathered from the context and request
 func (m *Mapper) UpdateMapperWithRequest(ctx context.Context, request MapperInput) error {
 	// get data from context
-	lc, ok := lambdacontext.FromContext(ctx)
-	if !ok {
-		return errors.New("Error getting lambda context")
+	if m.local {
+		m.AccountID = "000000000000"
+	} else {
+		lc, ok := lambdacontext.FromContext(ctx)
+		if !ok {
+			return errors.New("Error getting lambda context")
+		}
+		m.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
 	}
-	m.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
+
 	m.JobID = request.JobID
 	m.MapID = request.Mapping.MapID
 	m.NumQueues = request.NumQueues
@@ -149,14 +154,9 @@ func (m *Mapper) DownloadFile(object objectstore.ObjectRange) (*string, error) {
 		Key:    aws.String(object.Key),
 		Range:  aws.String(objectRange),
 	}
-	bytesRead, err := m.DownloaderAPI.Download(context.Background(), file, input)
+	_, err = m.DownloaderAPI.Download(context.Background(), file, input)
 	if err != nil {
 		return nil, err
-	}
-
-	// check that the bytes read match expectation
-	if bytesRead != object.FinalByte-object.InitialByte {
-		return nil, errors.New("File was not read correctly")
 	}
 
 	filename := file.Name()
@@ -333,7 +333,7 @@ func (m *Mapper) GetRandomQueuePartition() int {
 
 	newSource := rand.NewSource(int64(bi.Uint64()))
 	randomWithSeed := rand.New(newSource)
-	return randomWithSeed.Intn(int(m.NumQueues) + 1)
+	return randomWithSeed.Intn(int(m.NumQueues))
 }
 
 // EmitRandom sends the data (a single value) produced by a mapper

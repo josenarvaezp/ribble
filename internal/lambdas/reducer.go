@@ -89,11 +89,16 @@ type Reducer struct {
 // gathered from the context and request
 func (r *Reducer) UpdateReducerWithRequest(ctx context.Context, request ReducerInput) error {
 	// get data from context
-	lc, ok := lambdacontext.FromContext(ctx)
-	if !ok {
-		return errors.New("Error getting lambda context")
+	if r.Local {
+		r.AccountID = "000000000000"
+	} else {
+		lc, ok := lambdacontext.FromContext(ctx)
+		if !ok {
+			return errors.New("Error getting lambda context")
+		}
+		r.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
 	}
-	r.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
+
 	r.ReducerID = request.ReducerID
 	r.JobID = request.JobID
 	r.NumMappers = request.NumMappers
@@ -261,7 +266,7 @@ func (r *Reducer) EmitValuesToFinalReducer(ctx context.Context) (int, error) {
 		messageJSONString := string(p)
 
 		queueName := fmt.Sprintf("%s-%s", r.JobID.String(), "final-aggregator")
-		queueURL := GetQueueURL(queueName, r.Region, r.AccountID, false)
+		queueURL := GetQueueURL(queueName, r.Region, r.AccountID, r.Local)
 		params := &sqs.SendMessageInput{
 			MessageBody: &messageJSONString,
 			MessageAttributes: map[string]types.MessageAttributeValue{
