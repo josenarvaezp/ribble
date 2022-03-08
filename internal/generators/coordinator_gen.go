@@ -38,11 +38,18 @@ func GetCoordinatorData(jobID string, mapperData *FunctionData) *CoordinatorData
 }
 
 // ExecuteCoordinatorGenerator generates a go file with the auto generated code
-func ExecuteCoordinatorGenerator(jobID string, aggregatorType lambdas.AggregatorType) error {
-	// get string representation of the aggregator function
-	coordinatorData, err := AggregatorTypeToCoordinatorData(aggregatorType)
-	if err != nil {
-		return err
+func ExecuteCoordinatorGenerator(jobID string, randomizedPartition bool) error {
+	coordinatorData := &CoordinatorData{}
+
+	// get correct coordinator data for template
+	var templateValue string
+	if randomizedPartition {
+		templateValue = randomCoordinatorTemplate
+		coordinatorData.LambdaAggregator = lambdas.ECRRandomMapAggregator
+		coordinatorData.LambdaFinalAggregator = lambdas.ECRFinalMapAggregator
+	} else {
+		templateValue = mapCoordinatorTemplate
+		coordinatorData.LambdaAggregator = lambdas.ECRMapAggregator
 	}
 
 	// dir and file where generated code is writen to
@@ -63,16 +70,6 @@ func ExecuteCoordinatorGenerator(jobID string, aggregatorType lambdas.Aggregator
 		return err
 	}
 	defer fileWriter.Close()
-
-	// get template depending on the aggregator type used
-	var templateValue string
-	if aggregatorType == lambdas.SumAggregator {
-		// it is a single value aggregator
-		templateValue = valueCoordinatorTemplate
-	} else {
-		// it is a map aggregator
-		templateValue = mapCoordinatorTemplate
-	}
 
 	// generate template
 	t := template.Must(template.New("coordinator").Parse(templateValue))

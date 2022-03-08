@@ -68,10 +68,15 @@ func TestQuery6(filename string) aggregators.MapAggregator {
 	output := make(aggregators.MapAggregator)
 
 	scanner := bufio.NewScanner(file)
-	testsum := float64(0)
 	for scanner.Scan() {
 		// read line and get values
 		fields := strings.Split(scanner.Text(), "|")
+
+		if len(fields) != 17 {
+			// incorrect number of fields read
+			continue
+		}
+
 		lineValues := getValues(fields)
 
 		if lineValues.skip() {
@@ -81,7 +86,6 @@ func TestQuery6(filename string) aggregators.MapAggregator {
 		}
 
 		// sum values
-		testsum = testsum + lineValues.extendedPrice*lineValues.discount
 		output.AddSum("revenue", lineValues.extendedPrice*lineValues.discount)
 	}
 

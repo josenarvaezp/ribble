@@ -29,7 +29,7 @@ func GetQueueURL(queueName string, region string, accountID string, local bool) 
 
 	if local {
 		queueURL = fmt.Sprintf(
-			"https://localstack:4566/000000000000/%s",
+			"https://localhost:4566/000000000000/%s",
 			queueName,
 		)
 	} else {

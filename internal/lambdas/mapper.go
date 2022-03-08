@@ -92,7 +92,7 @@ func NewMapper(
 
 	// create config
 	if local {
-		cfg, err = config.InitLocalLambdaCfg()
+		cfg, err = config.InitLocalCfg()
 		if err != nil {
 			return nil, err
 		}
@@ -122,11 +122,16 @@ func NewMapper(
 // gathered from the context and request
 func (m *Mapper) UpdateMapperWithRequest(ctx context.Context, request MapperInput) error {
 	// get data from context
-	lc, ok := lambdacontext.FromContext(ctx)
-	if !ok {
-		return errors.New("Error getting lambda context")
+	if m.local {
+		m.AccountID = "000000000000"
+	} else {
+		lc, ok := lambdacontext.FromContext(ctx)
+		if !ok {
+			return errors.New("Error getting lambda context")
+		}
+		m.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
 	}
-	m.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
+
 	m.JobID = request.JobID
 	m.MapID = request.Mapping.MapID
 	m.NumQueues = request.NumQueues
@@ -149,14 +154,9 @@ func (m *Mapper) DownloadFile(object objectstore.ObjectRange) (*string, error) {
 		Key:    aws.String(object.Key),
 		Range:  aws.String(objectRange),
 	}
-	bytesRead, err := m.DownloaderAPI.Download(context.Background(), file, input)
+	_, err = m.DownloaderAPI.Download(context.Background(), file, input)
 	if err != nil {
 		return nil, err
-	}
-
-	// check that the bytes read match expectation
-	if bytesRead != object.FinalByte-object.InitialByte {
-		return nil, errors.New("File was not read correctly")
 	}
 
 	filename := file.Name()
@@ -333,42 +333,65 @@ func (m *Mapper) GetRandomQueuePartition() int {
 
 	newSource := rand.NewSource(int64(bi.Uint64()))
 	randomWithSeed := rand.New(newSource)
-	return randomWithSeed.Intn(int(m.NumQueues) + 1)
+	return randomWithSeed.Intn(int(m.NumQueues))
 }
 
-// // EmitValues sends the data (a single value) produced by a mapper
-// func (m *Mapper) EmitValue(ctx context.Context, partition int, value int) error {
-// 	// use map id as message id as only one value per map is emited
-// 	messageID := m.MapID.String()
+// EmitRandom sends the data (a single value) produced by a mapper
+// to random partition queues. This is used when the distribution of
+// keys is not good to create good load balancing.
+func (m *Mapper) EmitRandom(ctx context.Context, outputMap aggregators.MapAggregator, messageMetadata map[int]int64) error {
+	for key, value := range outputMap {
+		messageID := uuid.New().String()
 
-// 	// encode map input into JSON
-// 	p, err := json.Marshal(MapMessage{
-// 		Value: value,
-// 	})
-// 	if err != nil {
-// 		return err
-// 	}
-// 	messageJSONString := string(p)
+		// get partition queue from key
+		partitionQueue := m.GetRandomQueuePartition()
 
-// 	queueName := fmt.Sprintf("%s-%d", m.JobID.String(), partition)
-// 	queueURL := GetQueueURL(queueName, m.Region, m.AccountID, m.local)
-// 	params := &sqs.SendMessageInput{
-// 		MessageBody: &messageJSONString,
-// 		MessageAttributes: map[string]types.MessageAttributeValue{
-// 			MessageIDAttribute: {
-// 				DataType:    &stringDataType,
-// 				StringValue: &messageID,
-// 			},
-// 		},
-// 		QueueUrl: &queueURL,
-// 	}
-// 	_, err = m.QueuesAPI.SendMessage(ctx, params)
-// 	if err != nil {
-// 		return err
-// 	}
+		aggregatorType := GetAggregatorType(value)
 
-// 	return nil
-// }
+		// add value to batch
+		mapMessage := aggregators.ReduceMessage{
+			Key:  key,
+			Type: int64(aggregatorType),
+		}
+
+		if aggregatorType == AvgAggregator {
+			castAvg := value.(*aggregators.Avg)
+			mapMessage.Value = castAvg.GetSum()
+			mapMessage.Count = castAvg.GetCount()
+		} else {
+			mapMessage.Value = value.ToNum()
+		}
+
+		// encode map input into JSON
+		p, err := json.Marshal(mapMessage)
+		if err != nil {
+			return err
+		}
+		messageJSONString := string(p)
+
+		queueName := fmt.Sprintf("%s-%d", m.JobID.String(), partitionQueue)
+		queueURL := GetQueueURL(queueName, m.Region, m.AccountID, m.local)
+		params := &sqs.SendMessageInput{
+			MessageBody: &messageJSONString,
+			MessageAttributes: map[string]types.MessageAttributeValue{
+				MessageIDAttribute: {
+					DataType:    &stringDataType,
+					StringValue: &messageID,
+				},
+			},
+			QueueUrl: &queueURL,
+		}
+		_, err = m.QueuesAPI.SendMessage(ctx, params)
+		if err != nil {
+			return err
+		}
+
+		// update message metadata
+		messageMetadata[partitionQueue] = messageMetadata[partitionQueue] + int64(1)
+	}
+
+	return nil
+}
 
 // SendMetadata sends the metadata to the metadata queues for mappers
 // that work on single values
@@ -449,7 +472,7 @@ type QueueMetadataSingleValue struct {
 // writing out the output
 func (m *Mapper) SendBatchMetadata(ctx context.Context, batchMetadata map[int]int64) error {
 	meta := &QueueMetadata{
-		MapID: m.MapID.String(), // TODO
+		MapID: m.MapID.String(),
 	}
 
 	// loop through the queues

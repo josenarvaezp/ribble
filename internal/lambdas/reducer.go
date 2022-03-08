@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	sqsTypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/objectstore"
@@ -34,17 +35,17 @@ const (
 
 const (
 	// ECR repo aggregator names
-	ECRMapAggregator string = "map_aggregator"
-	ECRSumAggregator string = "sum_aggregator"
-	// ECRAggregatorSumFinal string = "sum_final_aggregator"
+	ECRMapAggregator       string = "map_aggregator"
+	ECRRandomMapAggregator string = "random_map_aggregator"
+	ECRFinalMapAggregator  string = "final_map_aggregator"
 )
 
 var (
 	// ECR repo aggregator names as a list
 	ECRAggregators []string = []string{
 		ECRMapAggregator,
-		// ECRSumAggregator,
-		// ECRAggregatorSumFinal,
+		ECRRandomMapAggregator,
+		ECRFinalMapAggregator,
 	}
 )
 
@@ -88,11 +89,16 @@ type Reducer struct {
 // gathered from the context and request
 func (r *Reducer) UpdateReducerWithRequest(ctx context.Context, request ReducerInput) error {
 	// get data from context
-	lc, ok := lambdacontext.FromContext(ctx)
-	if !ok {
-		return errors.New("Error getting lambda context")
+	if r.Local {
+		r.AccountID = "000000000000"
+	} else {
+		lc, ok := lambdacontext.FromContext(ctx)
+		if !ok {
+			return errors.New("Error getting lambda context")
+		}
+		r.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
 	}
-	r.AccountID = strings.Split(lc.InvokedFunctionArn, ":")[4]
+
 	r.ReducerID = request.ReducerID
 	r.JobID = request.JobID
 	r.NumMappers = request.NumMappers
@@ -177,14 +183,14 @@ func (r *Reducer) GetNumberOfBatchesToProcess(ctx context.Context) (*int, error)
 	return &totalNumOfMessagesToProcess, nil
 }
 
-// GetNumberOfMessagesToProcess gets the number of messages the reducer needs to process
+// GetNumberOfBatchesToProcess gets the number of batches a the reducer needs to process
 // based on the metadata available in the metadata queue for that reducer
-func (r *Reducer) GetNumberOfMessagesToProcess(ctx context.Context) (*int, error) {
+func (r *Reducer) GetNumberOfMessagesToProcessFinalAggregator(ctx context.Context, numReducers int) (*int, error) {
 	// holds number of messages to process
 	totalNumOfMessagesToProcess := 0
 
 	// receive message params
-	queueName := fmt.Sprintf("%s-%d-meta", r.JobID.String(), r.QueuePartition)
+	queueName := fmt.Sprintf("%s-final-aggregator-meta", r.JobID.String())
 	queueURL := GetQueueURL(queueName, r.Region, r.AccountID, r.Local)
 	params := &sqs.ReceiveMessageInput{
 		QueueUrl:            &queueURL,
@@ -194,10 +200,10 @@ func (r *Reducer) GetNumberOfMessagesToProcess(ctx context.Context) (*int, error
 
 	// dedupeMap is used to check if we have processed a message already
 	dedupeMap := make(map[string]bool)
-	mappersProccessedCount := 0
+	reducersProccessedCount := 0
 
 	// get metadata until we have metadata from each mapper
-	for mappersProccessedCount != r.NumMappers {
+	for reducersProccessedCount != numReducers {
 		// haven't recived all metadata from all mappers
 		output, err := r.QueuesAPI.ReceiveMessage(ctx, params)
 		if err != nil {
@@ -207,7 +213,7 @@ func (r *Reducer) GetNumberOfMessagesToProcess(ctx context.Context) (*int, error
 		for _, message := range output.Messages {
 
 			// unmarshal metadata message
-			var res QueueMetadataSingleValue
+			var res QueueMetadata
 			body := []byte(*message.Body)
 			err = json.Unmarshal(body, &res)
 			if err != nil {
@@ -218,11 +224,8 @@ func (r *Reducer) GetNumberOfMessagesToProcess(ctx context.Context) (*int, error
 			// processed the current message already
 			if _, ok := dedupeMap[res.MapID]; !ok {
 				dedupeMap[res.MapID] = true
-				if res.Sent {
-					totalNumOfMessagesToProcess = totalNumOfMessagesToProcess + 1
-				}
-
-				mappersProccessedCount++
+				totalNumOfMessagesToProcess = totalNumOfMessagesToProcess + res.NumBatches
+				reducersProccessedCount++
 			}
 		}
 	}
@@ -230,40 +233,95 @@ func (r *Reducer) GetNumberOfMessagesToProcess(ctx context.Context) (*int, error
 	return &totalNumOfMessagesToProcess, nil
 }
 
-// // EmitValues sends the data (a single value) produced by a reducer to the
-// // final reduce queue
-// func (r *Reducer) EmitValue(ctx context.Context, value int) error {
-// 	// use map id as message id as only one value per map is emited
-// 	reducerID := r.ReducerID.String()
+// EmitValuesToFinalReducer sends the data (a single value) produced by a reducer to the
+// final reduce queue
+func (r *Reducer) EmitValuesToFinalReducer(ctx context.Context) (int, error) {
+	messageMetadata := 0
 
-// 	// encode input into JSON
-// 	p, err := json.Marshal(MapInt{
-// 		Value: value,
-// 	})
-// 	if err != nil {
-// 		return err
-// 	}
-// 	messageJSONString := string(p)
+	outputMap := r.Output.(aggregators.MapAggregator)
+	for key, value := range outputMap {
+		messageID := uuid.New().String()
 
-// 	queueName := fmt.Sprintf("%s-%s", r.JobID.String(), "final-aggregator")
-// 	queueURL := GetQueueURL(queueName, r.Region, r.AccountID, false)
-// 	params := &sqs.SendMessageInput{
-// 		MessageBody: &messageJSONString,
-// 		MessageAttributes: map[string]types.MessageAttributeValue{
-// 			MessageIDAttribute: {
-// 				DataType:    &stringDataType,
-// 				StringValue: &reducerID,
-// 			},
-// 		},
-// 		QueueUrl: &queueURL,
-// 	}
-// 	_, err = r.QueuesAPI.SendMessage(ctx, params)
-// 	if err != nil {
-// 		return err
-// 	}
+		aggregatorType := GetAggregatorType(value)
 
-// 	return nil
-// }
+		// add value to batch
+		mapMessage := aggregators.ReduceMessage{
+			Key:  key,
+			Type: int64(aggregatorType),
+		}
+
+		if aggregatorType == AvgAggregator {
+			castAvg := value.(*aggregators.Avg)
+			mapMessage.Value = castAvg.GetSum()
+			mapMessage.Count = castAvg.GetCount()
+		} else {
+			mapMessage.Value = value.ToNum()
+		}
+
+		// encode map input into JSON
+		p, err := json.Marshal(mapMessage)
+		if err != nil {
+			return 0, err
+		}
+		messageJSONString := string(p)
+
+		queueName := fmt.Sprintf("%s-%s", r.JobID.String(), "final-aggregator")
+		queueURL := GetQueueURL(queueName, r.Region, r.AccountID, r.Local)
+		params := &sqs.SendMessageInput{
+			MessageBody: &messageJSONString,
+			MessageAttributes: map[string]types.MessageAttributeValue{
+				MessageIDAttribute: {
+					DataType:    &stringDataType,
+					StringValue: &messageID,
+				},
+			},
+			QueueUrl: &queueURL,
+		}
+		_, err = r.QueuesAPI.SendMessage(ctx, params)
+		if err != nil {
+			return 0, err
+		}
+
+		// update message metadata
+		messageMetadata = messageMetadata + 1
+	}
+
+	return messageMetadata, nil
+}
+
+// SendMetadata sends the number of messages the current reducers sent to the final queue
+func (r *Reducer) SendMetadata(ctx context.Context, messagesSent int) error {
+	meta := &QueueMetadata{
+		MapID: r.ReducerID.String(),
+	}
+
+	// send params
+	queueName := fmt.Sprintf("%s-final-aggregator-meta", r.JobID.String())
+	queueURL := GetQueueURL(queueName, r.Region, r.AccountID, false)
+	params := &sqs.SendMessageInput{
+		QueueUrl: &queueURL,
+	}
+
+	// add number of messages
+	meta.NumBatches = messagesSent
+
+	// encode metadata into JSON
+	p, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	metaJSONString := string(p)
+
+	// add metadata to body
+	params.MessageBody = &metaJSONString
+
+	_, err = r.QueuesAPI.SendMessage(ctx, params)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 
 // SaveIntermediateOutput saves the intermediate output into an S3 object
 func (r *Reducer) SaveIntermediateOutput(

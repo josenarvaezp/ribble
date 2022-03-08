@@ -268,7 +268,7 @@ var runCmd = &cobra.Command{
 		jobDriver.BuildData = buildData
 
 		// generate mappings from S3 input bucket
-		mappings, err := jobDriver.GenerateMappings(ctx, false)
+		mappings, err := jobDriver.GenerateMappings(ctx)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error generating mappings from S3")
 			return

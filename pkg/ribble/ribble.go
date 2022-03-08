@@ -11,13 +11,14 @@ import (
 )
 
 type Config struct {
-	InputBuckets []string `yaml:"input"`
-	Region       string   `yaml:"region"`
-	Local        bool     `yaml:"local"`
-	LogLevel     int      `yaml:"logLevel"`
-	AccountID    string   `yaml:"accountID"`
-	Username     string   `yaml:"username"`
-	LogicalSplit bool     `yaml:"logicalSplit"`
+	InputBuckets        []string `yaml:"input"`
+	Region              string   `yaml:"region"`
+	Local               bool     `yaml:"local"`
+	LogLevel            int      `yaml:"logLevel"`
+	AccountID           string   `yaml:"accountID"`
+	Username            string   `yaml:"username"`
+	LogicalSplit        bool     `yaml:"logicalSplit"`
+	RandomizedPartition bool     `yaml:"randomizedPartition"`
 }
 
 func Job(mapper interface{}, config Config) error {
@@ -30,7 +31,7 @@ func Job(mapper interface{}, config Config) error {
 	flag.Parse()
 
 	// validate mapper function
-	aggregatorType, err := generators.ValidateMapper(mapper)
+	err := generators.ValidateMapper(mapper)
 	if err != nil {
 		return err
 	}
@@ -39,7 +40,7 @@ func Job(mapper interface{}, config Config) error {
 	mapperData := generators.GetFunctionData(mapper, jobID)
 
 	// generate mapper file for lambda function
-	err = generators.ExecuteMapperGenerator(jobID, aggregatorType, mapperData)
+	err = generators.ExecuteMapperGenerator(jobID, config.RandomizedPartition, mapperData)
 	if err != nil {
 		return err
 	}
@@ -48,7 +49,7 @@ func Job(mapper interface{}, config Config) error {
 	coordinatorData := generators.GetCoordinatorData(jobID, mapperData)
 
 	// generate coordinator file for lambda function
-	err = generators.ExecuteCoordinatorGenerator(jobID, aggregatorType)
+	err = generators.ExecuteCoordinatorGenerator(jobID, config.RandomizedPartition)
 	if err != nil {
 		return err
 	}

@@ -78,6 +78,11 @@ func TestQuery1(filename string) aggregators.MapAggregator {
 	for scanner.Scan() {
 		fields := strings.Split(scanner.Text(), "|")
 
+		if len(fields) != 17 {
+			// incorrect number of fields read
+			continue
+		}
+
 		shipdateValue := fields[L_SHIPDATE]
 		year, _ := strconv.Atoi(shipdateValue[0:4])
 		month, _ := strconv.Atoi(shipdateValue[6:7])
