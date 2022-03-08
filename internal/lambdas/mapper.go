@@ -336,39 +336,62 @@ func (m *Mapper) GetRandomQueuePartition() int {
 	return randomWithSeed.Intn(int(m.NumQueues) + 1)
 }
 
-// // EmitValues sends the data (a single value) produced by a mapper
-// func (m *Mapper) EmitValue(ctx context.Context, partition int, value int) error {
-// 	// use map id as message id as only one value per map is emited
-// 	messageID := m.MapID.String()
+// EmitRandom sends the data (a single value) produced by a mapper
+// to random partition queues. This is used when the distribution of
+// keys is not good to create good load balancing.
+func (m *Mapper) EmitRandom(ctx context.Context, outputMap aggregators.MapAggregator, messageMetadata map[int]int64) error {
+	for key, value := range outputMap {
+		messageID := uuid.New().String()
 
-// 	// encode map input into JSON
-// 	p, err := json.Marshal(MapMessage{
-// 		Value: value,
-// 	})
-// 	if err != nil {
-// 		return err
-// 	}
-// 	messageJSONString := string(p)
+		// get partition queue from key
+		partitionQueue := m.GetRandomQueuePartition()
 
-// 	queueName := fmt.Sprintf("%s-%d", m.JobID.String(), partition)
-// 	queueURL := GetQueueURL(queueName, m.Region, m.AccountID, m.local)
-// 	params := &sqs.SendMessageInput{
-// 		MessageBody: &messageJSONString,
-// 		MessageAttributes: map[string]types.MessageAttributeValue{
-// 			MessageIDAttribute: {
-// 				DataType:    &stringDataType,
-// 				StringValue: &messageID,
-// 			},
-// 		},
-// 		QueueUrl: &queueURL,
-// 	}
-// 	_, err = m.QueuesAPI.SendMessage(ctx, params)
-// 	if err != nil {
-// 		return err
-// 	}
+		aggregatorType := GetAggregatorType(value)
 
-// 	return nil
-// }
+		// add value to batch
+		mapMessage := aggregators.ReduceMessage{
+			Key:  key,
+			Type: int64(aggregatorType),
+		}
+
+		if aggregatorType == AvgAggregator {
+			castAvg := value.(*aggregators.Avg)
+			mapMessage.Value = castAvg.GetSum()
+			mapMessage.Count = castAvg.GetCount()
+		} else {
+			mapMessage.Value = value.ToNum()
+		}
+
+		// encode map input into JSON
+		p, err := json.Marshal(mapMessage)
+		if err != nil {
+			return err
+		}
+		messageJSONString := string(p)
+
+		queueName := fmt.Sprintf("%s-%d", m.JobID.String(), partitionQueue)
+		queueURL := GetQueueURL(queueName, m.Region, m.AccountID, m.local)
+		params := &sqs.SendMessageInput{
+			MessageBody: &messageJSONString,
+			MessageAttributes: map[string]types.MessageAttributeValue{
+				MessageIDAttribute: {
+					DataType:    &stringDataType,
+					StringValue: &messageID,
+				},
+			},
+			QueueUrl: &queueURL,
+		}
+		_, err = m.QueuesAPI.SendMessage(ctx, params)
+		if err != nil {
+			return err
+		}
+
+		// update message metadata
+		messageMetadata[partitionQueue] = messageMetadata[partitionQueue] + int64(1)
+	}
+
+	return nil
+}
 
 // SendMetadata sends the metadata to the metadata queues for mappers
 // that work on single values
@@ -449,7 +472,7 @@ type QueueMetadataSingleValue struct {
 // writing out the output
 func (m *Mapper) SendBatchMetadata(ctx context.Context, batchMetadata map[int]int64) error {
 	meta := &QueueMetadata{
-		MapID: m.MapID.String(), // TODO
+		MapID: m.MapID.String(),
 	}
 
 	// loop through the queues

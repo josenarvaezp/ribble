@@ -42,9 +42,16 @@ func (d *Driver) CreateJobBucket(ctx context.Context) error {
 // CreateDQL creates the dead-letter queue for the service
 func (d *Driver) CreateAggregatorsDLQ(ctx context.Context) (*string, error) {
 	// create final reduce queue
-	finalQueueName := fmt.Sprintf("%s-%s", d.JobID.String(), "final-aggregator")
-
+	finalMetadataQueueName := fmt.Sprintf("%s-final-aggregator-meta", d.JobID.String())
 	_, err := d.QueuesAPI.CreateQueue(ctx, &sqs.CreateQueueInput{
+		QueueName: &finalMetadataQueueName,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	finalQueueName := fmt.Sprintf("%s-%s", d.JobID.String(), "final-aggregator")
+	_, err = d.QueuesAPI.CreateQueue(ctx, &sqs.CreateQueueInput{
 		QueueName: &finalQueueName,
 	})
 	if err != nil {

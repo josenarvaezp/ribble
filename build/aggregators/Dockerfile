@@ -19,13 +19,13 @@ ADD ./aggregators ./aggregators
 
 # build aggregators
 RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_aggregator ./aggregators/map_aggregator/main/map_aggregator.go 
-# RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/sum ./aggregators/sum/main/sum.go 
-# RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/sum_final ./aggregators/sum_final/main/sum_final.go 
+RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/map_random_aggregator ./aggregators/map_random_aggregator/main/map_random_aggregator.go 
+RUN env GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o /build/final_aggregator ./aggregators/final_aggregator/main/final_aggregator.go 
 
 # compress
 RUN upx --best --lzma /build/map_aggregator
-# RUN upx --best --lzma /build/sum
-# RUN upx --best --lzma /build/sum_final
+RUN upx --best --lzma /build/map_random_aggregator
+RUN upx --best --lzma /build/final_aggregator
 
 # Build runtime for map aggregator
 FROM alpine as map_aggregator
@@ -34,16 +34,16 @@ COPY --from=build /build/map_aggregator /map_aggregator
 
 ENTRYPOINT [ "/map_aggregator" ]
 
-# # Build runtime for sum aggregator
-# FROM alpine as sum
+# Build runtime for map_random_aggregator aggregator
+FROM alpine as map_random_aggregator
 
-# COPY --from=build /build/sum /sum
+COPY --from=build /build/map_random_aggregator /map_random_aggregator
 
-# ENTRYPOINT [ "/sum" ]
+ENTRYPOINT [ "/map_random_aggregator" ]
 
-# # Build runtime for final sum aggregator
-# FROM alpine as sum_final
+# Build runtime for final_aggregator aggregator
+FROM alpine as final_aggregator
 
-# COPY --from=build /build/sum_final /sum_final
+COPY --from=build /build/final_aggregator /final_aggregator
 
-# ENTRYPOINT [ "/sum_final" ]
+ENTRYPOINT [ "/final_aggregator" ]

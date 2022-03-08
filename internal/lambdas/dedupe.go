@@ -177,7 +177,7 @@ func (d *DedupeSimple) UpdateMessageProcessed(mesageID string) {
 }
 
 // DedupeSimpleMap is used to hold a deduplication map where string is
-// the mapper uuid and bool represents if we have seen the value or not
+// the message uuid and bool represents if we have seen the value or not
 type DedupeSimpleMap map[string]bool
 
 // InitDedupeSimpleMap initializes a dedupe simple map

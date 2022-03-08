@@ -8,8 +8,6 @@ import (
 	"runtime"
 	"strings"
 	"text/template"
-
-	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
 var (
@@ -66,25 +64,23 @@ func GetFunctionData(i interface{}, jobID string) *FunctionData {
 
 // ValidateMapper gets a mapper function as input and check that its
 // return type is a valid aggregator type
-func ValidateMapper(mapper interface{}) (lambdas.AggregatorType, error) {
+func ValidateMapper(mapper interface{}) error {
 	mapperType := reflect.TypeOf(mapper)
 
 	// validate that the input of the function gets one argument
 	// which should be the filename
 	if mapperType.NumIn() != 1 {
-		return lambdas.InvalidAggregator,
-			errors.New("Invalid error signature. The mapper function can only take the filename as input")
+		return errors.New("Invalid error signature. The mapper function can only take the filename as input")
 	}
 
 	// validate the input of function is a string
 	if !mapperType.In(0).ConvertibleTo(stringType) {
-		return lambdas.InvalidAggregator,
-			errors.New("Invalid error signature. The input to the function should be a string")
+		return errors.New("Invalid error signature. The input to the function should be a string")
 	}
 
 	// validate that the function returns a single value
 	if mapperType.NumOut() != 1 {
-		return lambdas.InvalidAggregator, errors.New("The mapper function can only have one output")
+		return errors.New("The mapper function can only have one output")
 	}
 
 	// return the aggregator specified or return error if the output
@@ -93,11 +89,9 @@ func ValidateMapper(mapper interface{}) (lambdas.AggregatorType, error) {
 
 	switch aggregatorType.Name() {
 	case "MapAggregator":
-		return lambdas.MapAggregator, nil
-	case "Sum":
-		return lambdas.SumAggregator, nil
+		return nil
 	default:
-		return lambdas.InvalidAggregator, errors.New("Invalid aggregator used")
+		return errors.New("Invalid aggregator used")
 	}
 }
 
@@ -133,17 +127,16 @@ func ExecuteMapGenerator(jobID string, data *FunctionData, functionTemplate stri
 // to the aggregator used
 func ExecuteMapperGenerator(
 	jobID string,
-	aggregatorType lambdas.AggregatorType,
+	randomizedPartition bool,
 	functionData *FunctionData,
 ) error {
+
 	var template string
-	switch aggregatorType {
-	case lambdas.MapAggregator:
-		template = mapAggregatorTemplate
-	case lambdas.SumAggregator:
-		template = sumTemplate
-	default:
-		return errors.New("Invalid aggregator")
+
+	if randomizedPartition {
+		template = mapRandomTemplate
+	} else {
+		template = mapTemplate
 	}
 
 	err := ExecuteMapGenerator(jobID, functionData, template)
