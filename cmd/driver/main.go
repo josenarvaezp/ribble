@@ -35,10 +35,8 @@ func main() {
 
 	setCredsCmd.PersistentFlags().StringVar(&accountID, "account-id", "", "AWS account id")
 	setCredsCmd.PersistentFlags().StringVar(&username, "username", "", "AWS username")
-	setCredsCmd.PersistentFlags().StringVar(&region, "region", "", "AWS region")
 	setCredsCmd.MarkFlagRequired("account-id")
 	setCredsCmd.MarkFlagRequired("username")
-	setCredsCmd.MarkFlagRequired("region")
 	setCredsCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
 	setupCmd.PersistentFlags().StringVar(&accountID, "account-id", "", "AWS account id")
@@ -315,7 +313,6 @@ var setCredsCmd = &cobra.Command{
 
 		// set driver
 		jobDriver, err := driver.NewSetupDriver(&config.Config{
-			Region:    region,
 			AccountID: accountID,
 			Username:  username,
 		})

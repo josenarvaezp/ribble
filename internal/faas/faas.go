@@ -28,11 +28,6 @@ type FaasAPI interface {
 		params *lambda.PutFunctionConcurrencyInput,
 		optFns ...func(*lambda.Options),
 	) (*lambda.PutFunctionConcurrencyOutput, error)
-	PutFunctionEventInvokeConfig(
-		ctx context.Context,
-		params *lambda.PutFunctionEventInvokeConfigInput,
-		optFns ...func(*lambda.Options),
-	) (*lambda.PutFunctionEventInvokeConfigOutput, error)
 	PutProvisionedConcurrencyConfig(
 		ctx context.Context,
 		params *lambda.PutProvisionedConcurrencyConfigInput,
