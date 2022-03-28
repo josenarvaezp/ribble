@@ -30,6 +30,10 @@ type Aggregator interface {
 // values using different function
 type MapAggregator map[string]Aggregator
 
+func NewMap() MapAggregator {
+	return make(MapAggregator)
+}
+
 func (ma MapAggregator) Type() AggregatorType {
 	return MapAggregatorType
 }
@@ -412,4 +416,10 @@ type ReduceMessage struct {
 	Count    int     `json:"count,omitempty"`
 	Type     int64   `json:"type,omitempty"`
 	EmptyVal bool    `json:"empty,omitempty"`
+}
+
+// AggregatorPair can be used to implemented sort.Interface
+type AggregatorPair struct {
+	Key   string  `json:"key,omitempty"`
+	Value float64 `json:"value,omitempty"`
 }

@@ -158,10 +158,11 @@ func (c *Coordinator) AreMappersDone(ctx context.Context) error {
 func (c *Coordinator) InvokeReducers(ctx context.Context, reducerName string) error {
 	// function arn
 	functionArn := fmt.Sprintf(
-		"arn:aws:lambda:%s:%s:function:%s",
+		"arn:aws:lambda:%s:%s:function:%s_%s",
 		c.Region,
 		c.AccountID,
 		reducerName,
+		c.JobID.String(),
 	)
 
 	// invoke a reducer per each queue
@@ -205,10 +206,11 @@ func (c *Coordinator) InvokeReducers(ctx context.Context, reducerName string) er
 func (c *Coordinator) InvokeReducer(ctx context.Context, reducerName string) error {
 	// function arn
 	functionArn := fmt.Sprintf(
-		"arn:aws:lambda:%s:%s:function:%s",
+		"arn:aws:lambda:%s:%s:function:%s_%s",
 		c.Region,
 		c.AccountID,
 		reducerName,
+		c.JobID.String(),
 	)
 
 	// encode reducer input to json

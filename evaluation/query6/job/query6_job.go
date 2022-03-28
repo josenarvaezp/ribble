@@ -21,6 +21,8 @@ func main() {
 	// define job
 	ribble.Job(
 		query6.TestQuery6,
+		nil,
+		nil,
 		config,
 	)
 }

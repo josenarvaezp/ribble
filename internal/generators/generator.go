@@ -23,10 +23,11 @@ const (
 )
 
 type BuildData struct {
-	JobPath         string           `yaml:"JobPath,omitempty"`
-	BuildDir        string           `yaml:"BuildDir,omitempty"`
-	MapperData      *FunctionData    `yaml:"MapperData,omitempty"`
-	CoordinatorData *CoordinatorData `yaml:"CoordinatorData,omitempty"`
+	JobPath         string                 `yaml:"JobPath,omitempty"`
+	BuildDir        string                 `yaml:"BuildDir,omitempty"`
+	MapperData      *FunctionData          `yaml:"MapperData,omitempty"`
+	CoordinatorData *CoordinatorData       `yaml:"CoordinatorData,omitempty"`
+	ReducerData     []*ReducerFunctionData `yaml:"ReducerData,omitempty"`
 }
 
 // WriteBuildData writes the build data to a yaml file

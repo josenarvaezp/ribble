@@ -10,7 +10,6 @@ import (
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
-	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
 const (
@@ -78,8 +77,8 @@ func (d *Driver) UploadCoordinator(ctx context.Context) error {
 
 // UploadAggregators upploads the aggregator images to ECR
 func (d *Driver) UploadAggregators(ctx context.Context) error {
-	for _, aggregator := range lambdas.ECRAggregators {
-		err := d.CreateRepo(ctx, aggregator)
+	for _, reducer := range d.BuildData.ReducerData {
+		err := d.CreateRepo(ctx, reducer.ReducerName)
 		if err != nil {
 			// only ignore error if repo exists already
 			if !repoAlreadyExists(err) {
@@ -91,7 +90,7 @@ func (d *Driver) UploadAggregators(ctx context.Context) error {
 		// tag and push image
 		_, err = exec.Command(
 			scriptToUploadImages,
-			aggregator,
+			reducer.ReducerName,
 			"latest",
 			d.Config.AccountID,
 			d.Config.Region,
@@ -113,6 +112,11 @@ func (d *Driver) UploadJobImages(ctx context.Context) error {
 	}
 
 	err = d.UploadCoordinator(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = d.UploadAggregators(ctx)
 	if err != nil {
 		return err
 	}
@@ -186,21 +190,21 @@ func (d *Driver) CreateAggregatorLambdaFunctions(ctx context.Context, queueARN *
 	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
 	functionTimeout := int32(900)
 
-	for _, aggregator := range lambdas.ECRAggregators {
+	for _, reducer := range d.BuildData.ReducerData {
 		imageURI := fmt.Sprintf(
 			"%s.dkr.ecr.%s.amazonaws.com/%s:%s",
 			d.Config.AccountID,
 			d.Config.Region,
-			aggregator,
+			reducer.ImageName,
 			"latest",
 		)
-		functionDescription := fmt.Sprintf("Ribble function for %s", aggregator)
+		functionDescription := fmt.Sprintf("Ribble function for %s", reducer.ReducerName)
 
 		_, err := d.FaasAPI.CreateFunction(ctx, &lambda.CreateFunctionInput{
 			Code: &types.FunctionCode{
 				ImageUri: &imageURI,
 			},
-			FunctionName: &aggregator,
+			FunctionName: &reducer.ReducerName,
 			Role:         &ribbleRoleArn,
 			DeadLetterConfig: &types.DeadLetterConfig{
 				TargetArn: queueARN,

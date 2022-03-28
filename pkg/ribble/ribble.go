@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
 
 	"github.com/josenarvaezp/displ/internal/generators"
+	"github.com/josenarvaezp/displ/pkg/aggregators"
 	"gopkg.in/yaml.v2"
 )
 
@@ -21,7 +23,12 @@ type Config struct {
 	RandomizedPartition bool     `yaml:"randomizedPartition"`
 }
 
-func Job(mapper interface{}, config Config) error {
+func Job(
+	mapper func(string) aggregators.MapAggregator,
+	filter func(aggregators.MapAggregator) aggregators.MapAggregator,
+	sort func(aggregators.MapAggregator) sort.Interface,
+	config Config,
+) error {
 	// get job id and workspace from flags
 	var workSpace string
 	var jobID string
@@ -34,6 +41,20 @@ func Job(mapper interface{}, config Config) error {
 	err := generators.ValidateMapper(mapper)
 	if err != nil {
 		return err
+	}
+
+	// validate filter function
+	if filter != nil {
+		if err := generators.ValidateFilter(filter); err != nil {
+			return err
+		}
+	}
+
+	// validate sort function
+	if sort != nil {
+		if err := generators.ValidateSort(sort); err != nil {
+			return err
+		}
 	}
 
 	// get function name and package info
@@ -54,6 +75,15 @@ func Job(mapper interface{}, config Config) error {
 		return err
 	}
 
+	// get function name and package info
+	reducerData := generators.GetReducerData(filter, sort, config.RandomizedPartition, jobID)
+
+	// generate mapper file for lambda function
+	err = generators.ExecuteReducerGenerator(jobID, config.RandomizedPartition, reducerData)
+	if err != nil {
+		return err
+	}
+
 	// generate coordinator dockerfile
 	err = generators.ExecuteDockerfileGenerator(jobID, workSpace)
 	if err != nil {
@@ -66,6 +96,7 @@ func Job(mapper interface{}, config Config) error {
 		BuildDir:        fmt.Sprintf("%s/%s", generators.GeneratedFilesDir, jobID),
 		MapperData:      mapperData,
 		CoordinatorData: coordinatorData,
+		ReducerData:     reducerData,
 	}
 	err = generators.WriteBuildData(buildData, jobID)
 	if err != nil {

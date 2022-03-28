@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -103,6 +104,32 @@ func (r *Reducer) UpdateReducerWithRequest(ctx context.Context, request ReducerI
 	r.JobID = request.JobID
 	r.NumMappers = request.NumMappers
 	r.QueuePartition = request.QueuePartition
+
+	return nil
+}
+
+// WriteReducerOutput writes the output of the reducer to objectstore
+func (r *Reducer) WriteFinalReducerOutput(ctx context.Context, output sort.Interface, key string) error {
+	// encode map to JSON
+	p, err := json.Marshal(output)
+	if err != nil {
+		return err
+	}
+
+	// use uploader manager to write file to S3
+	jsonContentType := "application/json"
+	bucket := r.JobID.String()
+	input := &s3.PutObjectInput{
+		Bucket:        &bucket,
+		Key:           &key,
+		Body:          bytes.NewReader(p),
+		ContentType:   &jsonContentType,
+		ContentLength: int64(len(p)),
+	}
+	_, err = r.UploaderAPI.Upload(ctx, input)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -603,4 +630,12 @@ func (r *Reducer) SendFinishedEvent(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func RunFilter(output aggregators.MapAggregator, having func(aggregators.MapAggregator) aggregators.MapAggregator) aggregators.MapAggregator {
+	return having(output)
+}
+
+func RunSort(output aggregators.MapAggregator, sort func(aggregators.MapAggregator) sort.Interface) sort.Interface {
+	return sort(output)
 }

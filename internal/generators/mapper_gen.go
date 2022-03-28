@@ -8,11 +8,14 @@ import (
 	"runtime"
 	"strings"
 	"text/template"
+
+	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
 var (
 	// vars used to compare user data type
-	stringType = reflect.TypeOf("")
+	stringType        = reflect.TypeOf("")
+	mapAggregatorType = reflect.TypeOf(make(aggregators.MapAggregator))
 )
 
 // FunctionData defines the data needed for the template
