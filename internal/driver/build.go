@@ -13,7 +13,11 @@ import (
 // BuildJobGenerationBinary generates a binary file that is used to generate
 // the go files and dockerfiles needed to run the job
 func (d *Driver) BuildJobGenerationBinary() error {
-	_, err := exec.Command(generators.ScriptToGenerateGoFiles, d.BuildData.BuildDir, d.BuildData.JobPath).Output()
+	_, err := exec.Command(
+		generators.ScriptToGenerateGoFiles,
+		d.BuildData.BuildDir,
+		d.BuildData.JobPath,
+	).Output()
 	if err != nil {
 		return err
 	}

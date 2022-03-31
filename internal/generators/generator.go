@@ -14,6 +14,7 @@ const (
 	BinaryNameToBuildJob          = "gen_job"
 	WorkspaceFlag                 = "--workspace"
 	JobIdFlag                     = "--job-id"
+	JobLocalFlag                  = "--local"
 	ScriptToGenerateGoFiles       = "./build/generate_lambda_files.sh"
 	ScriptToBuildImages           = "./build/build_dockerfiles.sh"
 	ScriptToBuildAggregatorImages = "./build/build_aggregators.sh"

@@ -26,7 +26,7 @@ func init() {
 	log.SetLevel(log.ErrorLevel)
 
 	var err error
-	c, err = lambdas.NewCoordinator(false)
+	c, err = lambdas.NewCoordinator({{.Local}})
 	if err != nil {
 		log.WithError(err).Fatal("Error starting coordinator")
 		return
@@ -101,7 +101,7 @@ func init() {
 	log.SetLevel(log.ErrorLevel)
 
 	var err error
-	c, err = lambdas.NewCoordinator(false)
+	c, err = lambdas.NewCoordinator({{.Local}})
 	if err != nil {
 		log.WithError(err).Fatal("Error starting coordinator")
 		return
@@ -301,7 +301,7 @@ func init() {
 	log.SetLevel(log.ErrorLevel)
 
 	var err error
-	m, err = lambdas.NewMapper(false)
+	m, err = lambdas.NewMapper({{.Local}})
 	if err != nil {
 		log.WithError(err).Fatal("Error starting mapper")
 		return
@@ -414,7 +414,7 @@ func init() {
 	log.SetLevel(log.ErrorLevel)
 
 	var err error
-	m, err = lambdas.NewMapper(false)
+	m, err = lambdas.NewMapper({{.Local}})
 	if err != nil {
 		log.WithError(err).Fatal("Error starting mapper")
 		return
@@ -531,7 +531,7 @@ func init() {
 	log.SetLevel(log.ErrorLevel)
 
 	var err error
-	r, err = lambdas.NewRandomReducer(false)
+	r, err = lambdas.NewRandomReducer({{.Local}})
 	if err != nil {
 		log.WithError(err).Fatal("Error starting reducer")
 		return
@@ -759,7 +759,7 @@ func init() {
 	log.SetLevel(log.ErrorLevel)
 
 	var err error
-	r, err = lambdas.NewMapReducer(false)
+	r, err = lambdas.NewMapReducer({{.Local}})
 	if err != nil {
 		log.WithError(err).Fatal("Error starting reducer")
 		return
@@ -1017,7 +1017,7 @@ func init() {
 	log.SetLevel(log.ErrorLevel)
 
 	var err error
-	r, err = lambdas.NewRandomReducer(false)
+	r, err = lambdas.NewRandomReducer({{.Local}})
 	if err != nil {
 		log.WithError(err).Fatal("Error starting reducer")
 		return

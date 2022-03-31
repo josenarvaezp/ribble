@@ -58,7 +58,7 @@ func Job(
 	}
 
 	// get function name and package info
-	mapperData := generators.GetFunctionData(mapper, jobID)
+	mapperData := generators.GetFunctionData(mapper, jobID, config.Local)
 
 	// generate mapper file for lambda function
 	err = generators.ExecuteMapperGenerator(jobID, config.RandomizedPartition, mapperData)
@@ -67,16 +67,16 @@ func Job(
 	}
 
 	// generate coordinator
-	coordinatorData := generators.GetCoordinatorData(jobID, mapperData)
+	coordinatorData := generators.GetCoordinatorData(jobID, mapperData, config.RandomizedPartition, config.Local)
 
 	// generate coordinator file for lambda function
-	err = generators.ExecuteCoordinatorGenerator(jobID, config.RandomizedPartition)
+	err = generators.ExecuteCoordinatorGenerator(jobID, config.RandomizedPartition, coordinatorData)
 	if err != nil {
 		return err
 	}
 
 	// get function name and package info
-	reducerData := generators.GetReducerData(filter, sort, config.RandomizedPartition, jobID)
+	reducerData := generators.GetReducerData(filter, sort, config.RandomizedPartition, jobID, config.Local)
 
 	// generate mapper file for lambda function
 	err = generators.ExecuteReducerGenerator(jobID, config.RandomizedPartition, reducerData)

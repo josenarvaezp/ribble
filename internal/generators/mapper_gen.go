@@ -28,11 +28,12 @@ type FunctionData struct {
 	ImageTag      string `yaml:"ImageTag,omitempty"`
 	Dockefile     string `yaml:"Dockerfile,omitempty"`
 	Aggregator    string `yaml:"Aggregator,omitempty"`
+	Local         bool   `yaml:"Local,omitempty"`
 }
 
 // GetFunctionData gets as input an interface that should be a function
 // and gets the function's package information and the function name
-func GetFunctionData(i interface{}, jobID string) *FunctionData {
+func GetFunctionData(i interface{}, jobID string, local bool) *FunctionData {
 	fullName := runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 	lenFullName := len(fullName)
 
@@ -62,6 +63,7 @@ func GetFunctionData(i interface{}, jobID string) *FunctionData {
 			jobID,
 			functionName,
 		),
+		Local: local,
 	}
 }
 

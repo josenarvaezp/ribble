@@ -80,7 +80,7 @@ type Reducer struct {
 	NumMappers     int
 	QueuePartition int
 	Local          bool
-	Output         aggregators.Aggregator
+	Output         aggregators.MapAggregator
 	Dedupe         *Dedupe
 	DedupeSimple   *DedupeSimple
 	mu             sync.Mutex
@@ -265,8 +265,7 @@ func (r *Reducer) GetNumberOfMessagesToProcessFinalAggregator(ctx context.Contex
 func (r *Reducer) EmitValuesToFinalReducer(ctx context.Context) (int, error) {
 	messageMetadata := 0
 
-	outputMap := r.Output.(aggregators.MapAggregator)
-	for key, value := range outputMap {
+	for key, value := range r.Output {
 		messageID := uuid.New().String()
 
 		aggregatorType := GetAggregatorType(value)

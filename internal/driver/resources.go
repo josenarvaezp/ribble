@@ -190,15 +190,14 @@ func (d *Driver) StartCoordinator(ctx context.Context, numMappers int, numQueues
 
 	// function arn
 	functionArn := fmt.Sprintf(
-		"arn:aws:lambda:%s:%s:function:%s_%s",
+		"arn:aws:lambda:%s:%s:function:%s",
 		d.Config.Region,
 		d.Config.AccountID,
-		d.BuildData.CoordinatorData.Function,
-		d.JobID.String(),
+		d.BuildData.CoordinatorData.ImageName,
 	)
 
 	// send the mapping split into lamda
-	_, err = d.FaasAPI.Invoke(
+	res, err := d.FaasAPI.Invoke(
 		ctx,
 		&lambda.InvokeInput{
 			FunctionName:   aws.String(functionArn),
@@ -206,13 +205,17 @@ func (d *Driver) StartCoordinator(ctx context.Context, numMappers int, numQueues
 			InvocationType: lambdaTypes.InvocationTypeEvent,
 		},
 	)
-	return err
+	if err != nil {
+		return err
+	}
 
 	// error is ignored from asynch invokation and result only holds the status code
 	// check status code
-	// if result.StatusCode != SUCCESS_CODE {
-	// 	return errors.New("Error starting coordintator")
-	// }
+	if res.StatusCode != SUCCESS_CODE {
+		return errors.New("Error starting coordintator")
+	}
+
+	return nil
 }
 
 // bucketAlreadyExists checks if the s3 bucket being created already exists

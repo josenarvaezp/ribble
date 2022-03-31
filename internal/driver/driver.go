@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/josenarvaezp/displ/internal/access"
+	cloudwatch "github.com/josenarvaezp/displ/internal/cloud_watch"
 	"github.com/josenarvaezp/displ/internal/config"
 	"github.com/josenarvaezp/displ/internal/faas"
 	"github.com/josenarvaezp/displ/internal/generators"
@@ -56,6 +57,7 @@ type Driver struct {
 	QueuesAPI      queues.QueuesAPI
 	ImageRepoAPI   repo.ImageRepoAPI
 	IamAPI         access.IamAPI
+	LogsAPI        cloudwatch.LogsAPI
 	// user config
 	Config    config.Config
 	BuildData *generators.BuildData
@@ -117,6 +119,14 @@ func NewDriver(jobID uuid.UUID, conf *config.Config) (*Driver, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		// create assume role provider
+		stsSvc := sts.NewFromConfig(*cfg)
+		roleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", conf.AccountID)
+		stsCredProvider := stscreds.NewAssumeRoleProvider(stsSvc, roleArn)
+
+		// update credentials
+		cfg.Credentials = stsCredProvider
 	} else {
 		// Load the configuration using the aws config file
 		cfg, err = config.InitCfg(driver.Config.Region)

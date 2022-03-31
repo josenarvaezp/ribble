@@ -24,6 +24,7 @@ var (
 	username  string
 	region    string
 	verbose   *int
+	local     bool
 )
 
 func main() {
@@ -34,6 +35,7 @@ func main() {
 
 	setCredsCmd.PersistentFlags().StringVar(&accountID, "account-id", "", "AWS account id")
 	setCredsCmd.PersistentFlags().StringVar(&username, "username", "", "AWS username")
+	setCredsCmd.PersistentFlags().BoolVar(&local, "local", false, "local environment")
 	setCredsCmd.MarkFlagRequired("account-id")
 	setCredsCmd.MarkFlagRequired("username")
 	setCredsCmd.Flags().CountP("verbose", "v", "counted verbosity")
@@ -171,13 +173,6 @@ var uploadCmd = &cobra.Command{
 		}
 		jobDriver.BuildData = buildData
 
-		// upload images to amazon ECR
-		err = jobDriver.UploadJobImages(ctx)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error uploading images")
-			return
-		}
-
 		// Setting up resources
 		err = jobDriver.CreateJobBucket(ctx)
 		if err != nil {
@@ -192,26 +187,13 @@ var uploadCmd = &cobra.Command{
 			return
 		}
 
-		// create lambda mapper function
-		err = jobDriver.CreateMapperLambdaFunction(ctx, dlqArn)
+		// upload images to amazon ECR and create lambda function
+		err = jobDriver.UploadLambdaFunctions(ctx, dlqArn)
 		if err != nil {
-			driverLogger.WithError(err).Error("Error creating mapper lambda function")
+			driverLogger.WithError(err).Error("Error creating functions")
 			return
 		}
 
-		// create lambda coordinator function
-		err = jobDriver.CreateCoordinatorLambdaFunction(ctx, dlqArn)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error creating coordinator lambda function")
-			return
-		}
-
-		// create lambda aggregator function
-		err = jobDriver.CreateAggregatorLambdaFunctions(ctx, dlqArn)
-		if err != nil {
-			logrus.WithError(err).Error("Error creating aggreagots lambda functions")
-			return
-		}
 		fmt.Println("Upload successful with Job ID: ", jobDriver.JobID)
 	},
 }

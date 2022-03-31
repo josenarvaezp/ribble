@@ -23,20 +23,23 @@ type ReducerFunctionData struct {
 	ImageName      string `yaml:"ImageName,omitempty"`
 	ImageTag       string `yaml:"ImageTag,omitempty"`
 	Dockefile      string `yaml:"Dockerfile,omitempty"`
+	Local          bool   `yaml:"Local,omitempty"`
 }
 
 // GetReducerData gets as input an interface that should be a function
 // and gets the function's package information and the function name
-func GetReducerData(filter interface{}, sort interface{}, randomizedPartition bool, jobID string) []*ReducerFunctionData {
+func GetReducerData(filter interface{}, sort interface{}, randomizedPartition bool, jobID string, local bool) []*ReducerFunctionData {
 	functionData := []*ReducerFunctionData{}
 	if randomizedPartition {
 		// add final and random reducers data
 		functionData = append(functionData, &ReducerFunctionData{
 			ReducerName: lambdas.ECRFinalMapAggregator,
+			Local:       local,
 		})
 
 		functionData = append(functionData, &ReducerFunctionData{
 			ReducerName: lambdas.ECRRandomMapAggregator,
+			Local:       local,
 		})
 
 		for i := 0; i < 2; i++ {
@@ -47,7 +50,7 @@ func GetReducerData(filter interface{}, sort interface{}, randomizedPartition bo
 				functionData[i].ReducerName,
 			)
 
-			functionData[i].ImageName = fmt.Sprintf("%s_%s", strings.ToLower(functionData[0].ReducerName), jobID)
+			functionData[i].ImageName = fmt.Sprintf("%s_%s", strings.ToLower(functionData[i].ReducerName), jobID)
 			functionData[i].ImageTag = "latest"
 			functionData[i].Dockefile = fmt.Sprintf("%s/%s/dockerfiles/Dockerfile.%s",
 				GeneratedFilesDir,
@@ -58,6 +61,7 @@ func GetReducerData(filter interface{}, sort interface{}, randomizedPartition bo
 	} else {
 		functionData = append(functionData, &ReducerFunctionData{
 			ReducerName: lambdas.ECRMapAggregator,
+			Local:       local,
 		})
 		functionData[0].GeneratedFile = fmt.Sprintf("%s/%s/%s/%s.go",
 			GeneratedFilesDir,
