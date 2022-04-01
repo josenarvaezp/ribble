@@ -36,7 +36,7 @@ runclibuild:
 	./ribble build --job  ./examples/wordcount/job/job.go  
 
 remove_images:
-	docker images | grep none | awk '{ print $3; }' | xargs docker rmi
+	docker images | grep word | awk '{ print $3; }' | xargs docker rmi
 
 
 

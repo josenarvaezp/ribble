@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/josenarvaezp/displ/internal/access"
-	cloudwatch "github.com/josenarvaezp/displ/internal/cloud_watch"
 	"github.com/josenarvaezp/displ/internal/config"
 	"github.com/josenarvaezp/displ/internal/faas"
 	"github.com/josenarvaezp/displ/internal/generators"
@@ -57,7 +56,6 @@ type Driver struct {
 	QueuesAPI      queues.QueuesAPI
 	ImageRepoAPI   repo.ImageRepoAPI
 	IamAPI         access.IamAPI
-	LogsAPI        cloudwatch.LogsAPI
 	// user config
 	Config    config.Config
 	BuildData *generators.BuildData

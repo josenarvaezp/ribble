@@ -8,7 +8,6 @@ What we want to do -> Problem -> existing solutions that address some part of th
 - Define the type of data processing we want to have 
 - Easy to use for data analysts
 
-
 ## Background
 - big data and data processing
     - Big Data
@@ -51,7 +50,6 @@ SOLUTION
     - exaplain why we couldn't use an evet source mapper as we needed to keep track of duplicates in DynamoDB which would eventually become a bottleneck
     - explain that for the data shuffling we are doing hash-key load balancing
 - Explain Sum data stucture TODO
-- Explain String data structure TODO
 
 
 TODOs research

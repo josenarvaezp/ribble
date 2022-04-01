@@ -22,9 +22,10 @@ Ribble needs AWS permissions to access S3, SQS, Lambda, IAM, and ECR to run a pr
 ```
 ribble set-credentials \
     --account-id <your-account-id> \
-    --region <aws-region> \
     --username <aws-username>
 ```
+
+Use --local to create the credentials in localstack.
 
 ## Setup
 
@@ -69,3 +70,11 @@ The `run` command is used to run the job with the given job id. Note that this c
 ```
 ribble upload --job-id <id-of-job>
 ```
+
+# Using Localstack
+
+## Create a bucket
+awslocal s3 mb s3://my-input-bucket
+
+## Upload files to bucket
+awslocal s3 cp test.txt  s3://my-input-bucket/test.txt
