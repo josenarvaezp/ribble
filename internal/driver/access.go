@@ -39,23 +39,35 @@ var (
 		"Statement": [
 			{
 				"Effect": "Allow",
-				"Action": "s3:*",
-				"Resource": "arn:aws:s3::*:*"
-			},
-			{
-				"Effect": "Allow",
-				"Action": "sqs:*",
-				"Resource": "arn:aws:sqs::*:*"
-			},
-			{
-				"Effect": "Allow",
-				"Action": "lambda:*",
-				"Resource": "arn:aws:lambda::*:*"
-			},
-			{
-				"Effect": "Allow",
-				"Action": "ecr:CreateRepository",
-				"Resource": "arn:aws:ecr::*:*"
+				"Action": [
+					"lambda:CreateFunction",
+					"sqs:DeleteMessage",
+					"sqs:ReceiveMessage",
+					"s3:CreateBucket",
+					"iam:CreateRole",
+					"lambda:InvokeAsync",
+					"s3:ListBucket",
+					"iam:AttachRolePolicy",
+					"lambda:PutFunctionConcurrency",
+					"iam:PassRole",
+					"iam:GetRole",
+					"sqs:GetQueueUrl",
+					"iam:GetPolicy",
+					"lambda:InvokeFunction",
+					"ecr:CreateRepository",
+					"iam:AttachUserPolicy",
+					"sqs:SendMessage",
+					"sqs:GetQueueAttributes",
+					"iam:CreatePolicy",
+					"s3:PutObject",
+					"s3:GetObject",
+					"lambda:AddPermission",
+					"iam:GetUserPolicy",
+					"lambda:PutProvisionedConcurrencyConfig",
+					"sqs:CreateQueue",
+					"iam:GetRolePolicy"
+				],
+				"Resource": "*"
 			}
 		]
 	}`
@@ -145,16 +157,24 @@ func (d *Driver) AttachRolePolicy(ctx context.Context, policyARN *string) error 
 	})
 	if err != nil {
 		if resourceNotExists(err) {
-			_, err := d.IamAPI.AttachRolePolicy(ctx, &iam.AttachRolePolicyInput{
+			if _, err := d.IamAPI.AttachRolePolicy(ctx, &iam.AttachRolePolicyInput{
 				PolicyArn: policyARN,
 				RoleName:  &ribbleRoleName,
-			})
-			if err != nil {
+			}); err != nil {
 				return err
 			}
-		} else {
-			return err
+			return nil
 		}
+		return err
+	}
+
+	// attach lambda basic execution policy (includes cloudWatch)
+	lambdaBasicPolicyARN := "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+	if _, err := d.IamAPI.AttachRolePolicy(ctx, &iam.AttachRolePolicyInput{
+		PolicyArn: &lambdaBasicPolicyARN,
+		RoleName:  &ribbleRoleName,
+	}); err != nil {
+		return err
 	}
 
 	return nil

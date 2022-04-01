@@ -3,7 +3,7 @@ package generators
 import (
 	"errors"
 
-	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 )
 
 // AggregatorTypeToCoordinatorData generates the data needed for the coordinator

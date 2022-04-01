@@ -14,7 +14,7 @@ import (
 	s3Types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
-	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 )
 
 // CreateJobBucket creates a bucket for the job. This bucket is used as the working directory
@@ -37,33 +37,6 @@ func (d *Driver) CreateJobBucket(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// CreateDQL creates the dead-letter queue for the service
-func (d *Driver) CreateAggregatorsDLQ(ctx context.Context) (*string, error) {
-	// create dead-letter queue
-	dlqName := "ribble_aggregators_dlq"
-	dlqParams := &sqs.CreateQueueInput{
-		QueueName: &dlqName,
-	}
-
-	dlqOutput, err := d.QueuesAPI.CreateQueue(ctx, dlqParams)
-	if err != nil {
-		return nil, err
-	}
-
-	// create policy and convert it to json
-	getQueueAttributesParams := &sqs.GetQueueAttributesInput{
-		QueueUrl:       dlqOutput.QueueUrl,
-		AttributeNames: []types.QueueAttributeName{types.QueueAttributeNameQueueArn},
-	}
-	attributes, err := d.QueuesAPI.GetQueueAttributes(ctx, getQueueAttributesParams)
-	if err != nil {
-		return nil, err
-	}
-
-	dlqARN := attributes.Attributes["QueueArn"]
-	return &dlqARN, err
 }
 
 // CreateDQL creates the dead-letter queue for the service
@@ -217,15 +190,14 @@ func (d *Driver) StartCoordinator(ctx context.Context, numMappers int, numQueues
 
 	// function arn
 	functionArn := fmt.Sprintf(
-		"arn:aws:lambda:%s:%s:function:%s_%s",
+		"arn:aws:lambda:%s:%s:function:%s",
 		d.Config.Region,
 		d.Config.AccountID,
-		d.BuildData.CoordinatorData.Function,
-		d.JobID.String(),
+		d.BuildData.CoordinatorData.ImageName,
 	)
 
 	// send the mapping split into lamda
-	_, err = d.FaasAPI.Invoke(
+	res, err := d.FaasAPI.Invoke(
 		ctx,
 		&lambda.InvokeInput{
 			FunctionName:   aws.String(functionArn),
@@ -233,13 +205,17 @@ func (d *Driver) StartCoordinator(ctx context.Context, numMappers int, numQueues
 			InvocationType: lambdaTypes.InvocationTypeEvent,
 		},
 	)
-	return err
+	if err != nil {
+		return err
+	}
 
 	// error is ignored from asynch invokation and result only holds the status code
 	// check status code
-	// if result.StatusCode != SUCCESS_CODE {
-	// 	return errors.New("Error starting coordintator")
-	// }
+	if res.StatusCode != SUCCESS_CODE {
+		return errors.New("Error starting coordintator")
+	}
+
+	return nil
 }
 
 // bucketAlreadyExists checks if the s3 bucket being created already exists

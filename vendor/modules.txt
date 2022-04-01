@@ -4,7 +4,7 @@ github.com/aws/aws-lambda-go/lambda
 github.com/aws/aws-lambda-go/lambda/handlertrace
 github.com/aws/aws-lambda-go/lambda/messages
 github.com/aws/aws-lambda-go/lambdacontext
-# github.com/aws/aws-sdk-go-v2 v1.13.0
+# github.com/aws/aws-sdk-go-v2 v1.16.1
 ## explicit
 github.com/aws/aws-sdk-go-v2
 github.com/aws/aws-sdk-go-v2/aws
@@ -47,9 +47,11 @@ github.com/aws/aws-sdk-go-v2/feature/ec2/imds/internal/config
 # github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.7.4
 ## explicit
 github.com/aws/aws-sdk-go-v2/feature/s3/manager
-# github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.4
+# github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.8
+## explicit
 github.com/aws/aws-sdk-go-v2/internal/configsources
-# github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.2.0
+# github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.2
+## explicit
 github.com/aws/aws-sdk-go-v2/internal/endpoints/v2
 # github.com/aws/aws-sdk-go-v2/internal/ini v1.3.2
 github.com/aws/aws-sdk-go-v2/internal/ini
@@ -100,7 +102,7 @@ github.com/aws/aws-sdk-go-v2/service/sso/types
 github.com/aws/aws-sdk-go-v2/service/sts
 github.com/aws/aws-sdk-go-v2/service/sts/internal/endpoints
 github.com/aws/aws-sdk-go-v2/service/sts/types
-# github.com/aws/smithy-go v1.10.0
+# github.com/aws/smithy-go v1.11.2
 github.com/aws/smithy-go
 github.com/aws/smithy-go/document
 github.com/aws/smithy-go/encoding

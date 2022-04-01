@@ -57,12 +57,12 @@ func InitCfg(region string) (*aws.Config, error) {
 	return &cfg, nil
 }
 
-func InitLocalCfg() (*aws.Config, error) {
+func InitLocalCfg(region string) (*aws.Config, error) {
 	localstackEndpointResolver := aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
 		return aws.Endpoint{
 			PartitionID:   "aws",
-			URL:           "https://127.0.0.1:4566",
-			SigningRegion: "eu-west-2",
+			URL:           "https://localhost:4566",
+			SigningRegion: region,
 		}, nil
 	})
 
@@ -79,7 +79,6 @@ func InitLocalCfg() (*aws.Config, error) {
 		config.WithCredentialsProvider(localstackCredentialsResolver),
 	)
 	if err != nil {
-		// TODO: log error
 		fmt.Println(err)
 		return nil, err
 	}

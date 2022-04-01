@@ -5,7 +5,7 @@ import (
 	"os"
 	"text/template"
 
-	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 )
 
 // CoordinatorData defines the data needed for the template
@@ -17,10 +17,11 @@ type CoordinatorData struct {
 	ImageName             string `yaml:"ImageName,omitempty"`
 	ImageTag              string `yaml:"ImageTag,omitempty"`
 	Dockefile             string `yaml:"Dockerfile,omitempty"`
+	Local                 bool   `yaml:"Local,omitempty"`
 }
 
-func GetCoordinatorData(jobID string, mapperData *FunctionData) *CoordinatorData {
-	return &CoordinatorData{
+func GetCoordinatorData(jobID string, mapperData *FunctionData, randomizedPartition, local bool) *CoordinatorData {
+	coordinatorData := &CoordinatorData{
 		Function: "coordinator",
 		GeneratedFile: fmt.Sprintf("%s/%s/%s/%s.go",
 			GeneratedFilesDir,
@@ -34,22 +35,28 @@ func GetCoordinatorData(jobID string, mapperData *FunctionData) *CoordinatorData
 			GeneratedFilesDir,
 			jobID,
 		),
+		Local: local,
 	}
-}
-
-// ExecuteCoordinatorGenerator generates a go file with the auto generated code
-func ExecuteCoordinatorGenerator(jobID string, randomizedPartition bool) error {
-	coordinatorData := &CoordinatorData{}
 
 	// get correct coordinator data for template
-	var templateValue string
 	if randomizedPartition {
-		templateValue = randomCoordinatorTemplate
 		coordinatorData.LambdaAggregator = lambdas.ECRRandomMapAggregator
 		coordinatorData.LambdaFinalAggregator = lambdas.ECRFinalMapAggregator
 	} else {
-		templateValue = mapCoordinatorTemplate
 		coordinatorData.LambdaAggregator = lambdas.ECRMapAggregator
+	}
+
+	return coordinatorData
+}
+
+// ExecuteCoordinatorGenerator generates a go file with the auto generated code
+func ExecuteCoordinatorGenerator(jobID string, randomizedPartition bool, coordinatorData *CoordinatorData) error {
+	// get correct template
+	var templateValue string
+	if randomizedPartition {
+		templateValue = randomCoordinatorTemplate
+	} else {
+		templateValue = mapCoordinatorTemplate
 	}
 
 	// dir and file where generated code is writen to

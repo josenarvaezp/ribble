@@ -12,8 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
-	"github.com/josenarvaezp/displ/internal/lambdas"
 	"github.com/josenarvaezp/displ/internal/objectstore"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 )
 
 // TODOs:
@@ -244,11 +244,10 @@ func (d *Driver) generateMappingsForPartialObjects(objects []objectstore.Object,
 func (d *Driver) StartMappers(ctx context.Context, mappings []*lambdas.Mapping, numQueues int) error {
 	// function arn
 	functionArn := fmt.Sprintf(
-		"arn:aws:lambda:%s:%s:function:%s_%s",
+		"arn:aws:lambda:%s:%s:function:%s",
 		d.Config.Region,
 		d.Config.AccountID,
-		d.BuildData.MapperData.Function,
-		d.JobID.String(),
+		d.BuildData.MapperData.ImageName,
 	)
 
 	for _, currentMapping := range mappings {

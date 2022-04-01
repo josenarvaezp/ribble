@@ -14,6 +14,7 @@ const (
 	BinaryNameToBuildJob          = "gen_job"
 	WorkspaceFlag                 = "--workspace"
 	JobIdFlag                     = "--job-id"
+	JobLocalFlag                  = "--local"
 	ScriptToGenerateGoFiles       = "./build/generate_lambda_files.sh"
 	ScriptToBuildImages           = "./build/build_dockerfiles.sh"
 	ScriptToBuildAggregatorImages = "./build/build_aggregators.sh"
@@ -23,10 +24,11 @@ const (
 )
 
 type BuildData struct {
-	JobPath         string           `yaml:"JobPath,omitempty"`
-	BuildDir        string           `yaml:"BuildDir,omitempty"`
-	MapperData      *FunctionData    `yaml:"MapperData,omitempty"`
-	CoordinatorData *CoordinatorData `yaml:"CoordinatorData,omitempty"`
+	JobPath         string                 `yaml:"JobPath,omitempty"`
+	BuildDir        string                 `yaml:"BuildDir,omitempty"`
+	MapperData      *FunctionData          `yaml:"MapperData,omitempty"`
+	CoordinatorData *CoordinatorData       `yaml:"CoordinatorData,omitempty"`
+	ReducerData     []*ReducerFunctionData `yaml:"ReducerData,omitempty"`
 }
 
 // WriteBuildData writes the build data to a yaml file

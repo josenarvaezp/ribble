@@ -8,10 +8,10 @@ import (
 	"github.com/josenarvaezp/displ/internal/config"
 	"github.com/josenarvaezp/displ/internal/faas"
 	"github.com/josenarvaezp/displ/internal/generators"
-	"github.com/josenarvaezp/displ/internal/lambdas"
 	"github.com/josenarvaezp/displ/internal/objectstore"
 	"github.com/josenarvaezp/displ/internal/queues"
 	"github.com/josenarvaezp/displ/internal/repo"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
@@ -73,7 +73,7 @@ func NewSetupDriver(conf *config.Config) (*Driver, error) {
 
 	if driver.Config.Local {
 		// point clients to localstack
-		cfg, err = config.InitLocalCfg()
+		cfg, err = config.InitLocalCfg(conf.Region)
 		if err != nil {
 			return nil, err
 		}
@@ -113,10 +113,18 @@ func NewDriver(jobID uuid.UUID, conf *config.Config) (*Driver, error) {
 
 	if driver.Config.Local {
 		// point clients to localstack
-		cfg, err = config.InitLocalCfg()
+		cfg, err = config.InitLocalCfg(conf.Region)
 		if err != nil {
 			return nil, err
 		}
+
+		// create assume role provider
+		stsSvc := sts.NewFromConfig(*cfg)
+		roleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", conf.AccountID)
+		stsCredProvider := stscreds.NewAssumeRoleProvider(stsSvc, roleArn)
+
+		// update credentials
+		cfg.Credentials = stsCredProvider
 	} else {
 		// Load the configuration using the aws config file
 		cfg, err = config.InitCfg(driver.Config.Region)

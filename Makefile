@@ -1,3 +1,6 @@
+build_cli:
+	go build -o ./ribble ./cmd/driver/main.go
+
 lf:
 	awslocal s3 ls
 
@@ -27,14 +30,13 @@ buildr:
 geto:
 	awslocal s3api get-object --bucket e33e7151-8ae8-4560-93b2-5ba389949f7d --key output/7ecd2711-56d1-4d01-90a2-90b80e92c7e1 res
 
-buildcli:
-	go build -o ./ribble ./cmd/driver/main.go
+
 
 runclibuild:
 	./ribble build --job  ./examples/wordcount/job/job.go  
 
 remove_images:
-	docker images | grep none | awk '{ print $3; }' | xargs docker rmi
+	docker images | grep word | awk '{ print $3; }' | xargs docker rmi
 
 
 

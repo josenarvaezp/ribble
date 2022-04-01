@@ -10,93 +10,99 @@ import (
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
-	"github.com/josenarvaezp/displ/internal/lambdas"
 )
 
 const (
-	scriptToUploadImages = "./build/upload_images.sh"
+	scriptToUploadImages        = "./build/upload_images.sh"
+	scriptToUploadImagesLocally = "./build/upload_images_locally.sh"
 )
 
 // CreateRepo creates a repository in ECR to upload an image
-func (d *Driver) CreateRepo(ctx context.Context, repoName string) error {
+func (d *Driver) CreateRepo(ctx context.Context, repoName string) (*string, error) {
 	// create repo
 	params := &ecr.CreateRepositoryInput{
 		RepositoryName: &repoName,
 		RegistryId:     &d.Config.AccountID,
 	}
-	_, err := d.ImageRepoAPI.CreateRepository(ctx, params)
+	res, err := d.ImageRepoAPI.CreateRepository(ctx, params)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return res.Repository.RepositoryUri, nil
 }
 
 // UploadMapper upploads a mapper image to ECR
-func (d *Driver) UploadMapper(ctx context.Context) error {
-	err := d.CreateRepo(ctx, d.BuildData.MapperData.ImageName)
+func (d *Driver) UploadImage(ctx context.Context, imageName, imageTag string) (*string, error) {
+	repoURI, err := d.CreateRepo(ctx, imageName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// tag and push image
-	_, err = exec.Command(
-		scriptToUploadImages,
-		d.BuildData.MapperData.ImageName,
-		d.BuildData.MapperData.ImageTag,
-		d.Config.AccountID,
-		d.Config.Region,
-	).Output()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// UploadCoordinator upploads a coordinator image to ECR
-func (d *Driver) UploadCoordinator(ctx context.Context) error {
-	err := d.CreateRepo(ctx, d.BuildData.CoordinatorData.ImageName)
-	if err != nil {
-		return err
-	}
-
-	// tag and push image
-	_, err = exec.Command(
-		scriptToUploadImages,
-		d.BuildData.CoordinatorData.ImageName,
-		d.BuildData.CoordinatorData.ImageTag,
-		d.Config.AccountID,
-		d.Config.Region,
-	).Output()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// UploadAggregators upploads the aggregator images to ECR
-func (d *Driver) UploadAggregators(ctx context.Context) error {
-	for _, aggregator := range lambdas.ECRAggregators {
-		err := d.CreateRepo(ctx, aggregator)
-		if err != nil {
-			// only ignore error if repo exists already
-			if !repoAlreadyExists(err) {
-				return err
-			}
-			return err
+	if d.Config.Local {
+		// tag and push image to localstack
+		if _, err := exec.Command(
+			scriptToUploadImagesLocally,
+			imageName,
+			imageTag,
+			*repoURI,
+		).Output(); err != nil {
+			return nil, err
 		}
-
-		// tag and push image
-		_, err = exec.Command(
+	} else {
+		// tag and push image to AWS
+		if _, err := exec.Command(
 			scriptToUploadImages,
-			aggregator,
-			"latest",
+			imageName,
+			imageTag,
 			d.Config.AccountID,
 			d.Config.Region,
-		).Output()
-		if err != nil {
+		).Output(); err != nil {
+			return nil, err
+		}
+	}
+
+	return repoURI, nil
+}
+
+func (d *Driver) UploadLambdaFunctionsLocal() error {
+	// to run lambda in localstack we need to create
+	// the functions as zip rather than containers
+
+	// create mapper lambda function
+	if _, err := exec.Command(
+		scriptToUploadImagesLocally,
+		d.BuildData.BuildDir,
+		d.BuildData.MapperData.GeneratedFile,
+		d.BuildData.MapperData.Function,
+		d.Config.Region,
+		d.BuildData.MapperData.ImageName,
+	).Output(); err != nil {
+		return err
+	}
+
+	// // create coordinator lambda function
+	if _, err := exec.Command(
+		scriptToUploadImagesLocally,
+		d.BuildData.BuildDir,
+		d.BuildData.CoordinatorData.GeneratedFile,
+		d.BuildData.CoordinatorData.Function,
+		d.Config.Region,
+		d.BuildData.CoordinatorData.ImageName,
+	).Output(); err != nil {
+		return err
+	}
+
+	// create reducer lambda function
+	for _, reducer := range d.BuildData.ReducerData {
+		if _, err := exec.Command(
+			scriptToUploadImagesLocally,
+			d.BuildData.BuildDir,
+			reducer.GeneratedFile,
+			reducer.ReducerName,
+			d.Config.Region,
+			reducer.ImageName,
+		).Output(); err != nil {
 			return err
 		}
 	}
@@ -104,118 +110,112 @@ func (d *Driver) UploadAggregators(ctx context.Context) error {
 	return nil
 }
 
-// UploadJobImages upploads the map, coordinator and
-// aggregator images needed for the job
-func (d *Driver) UploadJobImages(ctx context.Context) error {
-	err := d.UploadMapper(ctx)
-	if err != nil {
-		return err
+// UploadLambdaFunctions upploads the map, coordinator and
+// reducer images needed for the job and creates the lambda function
+func (d *Driver) UploadLambdaFunctions(ctx context.Context, dqlARN *string) error {
+	if d.Config.Local {
+		// upload images to localstack as zip files
+		err := d.UploadLambdaFunctionsLocal()
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
 
-	err = d.UploadCoordinator(ctx)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (d *Driver) CreateMapperLambdaFunction(ctx context.Context, lambdaDlqArn *string) error {
-	imageURI := fmt.Sprintf(
-		"%s.dkr.ecr.%s.amazonaws.com/%s:%s",
-		d.Config.AccountID,
-		d.Config.Region,
+	// upload mapper image
+	mapperURI, err := d.UploadImage(
+		ctx,
 		d.BuildData.MapperData.ImageName,
 		d.BuildData.MapperData.ImageTag,
 	)
-	functionDescription := fmt.Sprintf("Ribble function for %s", d.BuildData.MapperData.Function)
-	functionTimeout := int32(900)
-	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
-	functionName := fmt.Sprintf("%s_%s", d.BuildData.MapperData.Function, d.JobID.String())
+	if err != nil {
+		return err
+	}
 
-	_, err := d.FaasAPI.CreateFunction(ctx, &lambda.CreateFunctionInput{
-		Code: &types.FunctionCode{
-			ImageUri: &imageURI,
-		},
-		FunctionName: &functionName,
-		Role:         &ribbleRoleArn,
-		DeadLetterConfig: &types.DeadLetterConfig{
-			TargetArn: lambdaDlqArn,
-		},
-		Description: &functionDescription,
-		PackageType: types.PackageTypeImage,
-		Publish:     true,
-		Timeout:     &functionTimeout,
-	})
+	// create lambda mapper function
+	err = d.CreateLambdaFunction(
+		ctx,
+		d.BuildData.MapperData.ImageName,
+		d.BuildData.MapperData.ImageTag,
+		mapperURI,
+		dqlARN,
+	)
+	if err != nil {
+		return err
+	}
 
-	return err
-}
-
-func (d *Driver) CreateCoordinatorLambdaFunction(ctx context.Context, lambdaDlqArn *string) error {
-	imageURI := fmt.Sprintf(
-		"%s.dkr.ecr.%s.amazonaws.com/%s:%s",
-		d.Config.AccountID,
-		d.Config.Region,
+	// upload coordinator image
+	coordinatorURI, err := d.UploadImage(
+		ctx,
 		d.BuildData.CoordinatorData.ImageName,
 		d.BuildData.CoordinatorData.ImageTag,
 	)
-	functionDescription := fmt.Sprintf("Ribble function for %s", d.BuildData.CoordinatorData.Function)
-	functionTimeout := int32(900)
-	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
-	functionName := fmt.Sprintf("%s_%s", d.BuildData.CoordinatorData.Function, d.JobID.String())
+	if err != nil {
+		return err
+	}
 
-	_, err := d.FaasAPI.CreateFunction(ctx, &lambda.CreateFunctionInput{
-		Code: &types.FunctionCode{
-			ImageUri: &imageURI,
-		},
-		FunctionName: &functionName,
-		Role:         &ribbleRoleArn,
-		DeadLetterConfig: &types.DeadLetterConfig{
-			TargetArn: lambdaDlqArn,
-		},
-		Description: &functionDescription,
-		PackageType: types.PackageTypeImage,
-		Publish:     true,
-		Timeout:     &functionTimeout,
-	})
+	// create lambda coordinator function
+	err = d.CreateLambdaFunction(
+		ctx,
+		d.BuildData.CoordinatorData.ImageName,
+		d.BuildData.CoordinatorData.ImageTag,
+		coordinatorURI,
+		dqlARN,
+	)
+	if err != nil {
+		return err
+	}
 
-	return err
-}
-
-func (d *Driver) CreateAggregatorLambdaFunctions(ctx context.Context, queueARN *string) error {
-	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
-	functionTimeout := int32(900)
-
-	for _, aggregator := range lambdas.ECRAggregators {
-		imageURI := fmt.Sprintf(
-			"%s.dkr.ecr.%s.amazonaws.com/%s:%s",
-			d.Config.AccountID,
-			d.Config.Region,
-			aggregator,
-			"latest",
+	// create reducers
+	for _, reducer := range d.BuildData.ReducerData {
+		// upload reducer image
+		currentURI, err := d.UploadImage(
+			ctx,
+			reducer.ImageName,
+			reducer.ImageTag,
 		)
-		functionDescription := fmt.Sprintf("Ribble function for %s", aggregator)
+		if err != nil {
+			return err
+		}
 
-		_, err := d.FaasAPI.CreateFunction(ctx, &lambda.CreateFunctionInput{
-			Code: &types.FunctionCode{
-				ImageUri: &imageURI,
-			},
-			FunctionName: &aggregator,
-			Role:         &ribbleRoleArn,
-			DeadLetterConfig: &types.DeadLetterConfig{
-				TargetArn: queueARN,
-			},
-			Description: &functionDescription,
-			PackageType: types.PackageTypeImage,
-			Publish:     true,
-			Timeout:     &functionTimeout,
-		})
+		// create lambda reducer function
+		err = d.CreateLambdaFunction(
+			ctx,
+			reducer.ImageName,
+			reducer.ImageTag,
+			currentURI,
+			dqlARN,
+		)
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (d *Driver) CreateLambdaFunction(ctx context.Context, imageName, imageTag string, imageURI *string, lambdaDlqArn *string) error {
+	functionDescription := fmt.Sprintf("Ribble function for %s", imageName)
+	functionTimeout := int32(90)
+	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
+
+	_, err := d.FaasAPI.CreateFunction(ctx, &lambda.CreateFunctionInput{
+		Code: &types.FunctionCode{
+			ImageUri: imageURI,
+		},
+		FunctionName: &imageName,
+		Role:         &ribbleRoleArn,
+		DeadLetterConfig: &types.DeadLetterConfig{
+			TargetArn: lambdaDlqArn,
+		},
+		Description: &functionDescription,
+		PackageType: types.PackageTypeImage,
+		Publish:     true,
+		Timeout:     &functionTimeout,
+	})
+
+	return err
 }
 
 // repoAlreadyExists checks if the ecr repo being created already exists

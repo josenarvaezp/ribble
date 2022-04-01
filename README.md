@@ -6,6 +6,14 @@ To run Ribble you need to have the following in your local machine:
 - Docker 
 - AWS CLI installed and configured. Instructions can be found [here](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html)
 - To setup ribble your AWS user needs to have AdministratorAccess or permission to create roles and policies
+- Go (at least version 1.16)
+- Make
+
+## build Ribble CLI
+To build  the CLI tool run:
+```
+make build_cli
+```
 
 ## Set credentials
 
@@ -14,9 +22,10 @@ Ribble needs AWS permissions to access S3, SQS, Lambda, IAM, and ECR to run a pr
 ```
 ribble set-credentials \
     --account-id <your-account-id> \
-    --region <aws-region> \
     --username <aws-username>
 ```
+
+Use --local to create the credentials in localstack.
 
 ## Setup
 
@@ -61,3 +70,11 @@ The `run` command is used to run the job with the given job id. Note that this c
 ```
 ribble upload --job-id <id-of-job>
 ```
+
+# Using Localstack
+
+## Create a bucket
+awslocal s3 mb s3://my-input-bucket
+
+## Upload files to bucket
+awslocal s3 cp test.txt  s3://my-input-bucket/test.txt
