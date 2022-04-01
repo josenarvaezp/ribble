@@ -57,12 +57,12 @@ func InitCfg(region string) (*aws.Config, error) {
 	return &cfg, nil
 }
 
-func InitLocalCfg() (*aws.Config, error) {
+func InitLocalCfg(region string) (*aws.Config, error) {
 	localstackEndpointResolver := aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
 		return aws.Endpoint{
 			PartitionID:   "aws",
 			URL:           "https://localhost:4566",
-			SigningRegion: "eu-west-2",
+			SigningRegion: region,
 		}, nil
 	})
 

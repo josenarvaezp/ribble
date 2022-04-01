@@ -12,8 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
-	"github.com/josenarvaezp/displ/internal/lambdas"
 	"github.com/josenarvaezp/displ/internal/objectstore"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 )
 
 // TODOs:

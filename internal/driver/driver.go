@@ -9,10 +9,10 @@ import (
 	"github.com/josenarvaezp/displ/internal/config"
 	"github.com/josenarvaezp/displ/internal/faas"
 	"github.com/josenarvaezp/displ/internal/generators"
-	"github.com/josenarvaezp/displ/internal/lambdas"
 	"github.com/josenarvaezp/displ/internal/objectstore"
 	"github.com/josenarvaezp/displ/internal/queues"
 	"github.com/josenarvaezp/displ/internal/repo"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"

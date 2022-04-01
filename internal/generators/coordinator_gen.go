@@ -5,7 +5,7 @@ import (
 	"os"
 	"text/template"
 
-	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 )
 
 // CoordinatorData defines the data needed for the template

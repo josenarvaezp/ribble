@@ -65,9 +65,64 @@ func (d *Driver) UploadImage(ctx context.Context, imageName, imageTag string) (*
 	return repoURI, nil
 }
 
+func (d *Driver) UploadLambdaFunctionsLocal() error {
+	// to run lambda in localstack we need to create
+	// the functions as zip rather than containers
+
+	// create mapper lambda function
+	if _, err := exec.Command(
+		scriptToUploadImagesLocally,
+		d.BuildData.BuildDir,
+		d.BuildData.MapperData.GeneratedFile,
+		d.BuildData.MapperData.Function,
+		d.Config.Region,
+		d.BuildData.MapperData.ImageName,
+	).Output(); err != nil {
+		return err
+	}
+
+	// // create coordinator lambda function
+	if _, err := exec.Command(
+		scriptToUploadImagesLocally,
+		d.BuildData.BuildDir,
+		d.BuildData.CoordinatorData.GeneratedFile,
+		d.BuildData.CoordinatorData.Function,
+		d.Config.Region,
+		d.BuildData.CoordinatorData.ImageName,
+	).Output(); err != nil {
+		return err
+	}
+
+	// create reducer lambda function
+	for _, reducer := range d.BuildData.ReducerData {
+		if _, err := exec.Command(
+			scriptToUploadImagesLocally,
+			d.BuildData.BuildDir,
+			reducer.GeneratedFile,
+			reducer.ReducerName,
+			d.Config.Region,
+			reducer.ImageName,
+		).Output(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // UploadLambdaFunctions upploads the map, coordinator and
 // reducer images needed for the job and creates the lambda function
 func (d *Driver) UploadLambdaFunctions(ctx context.Context, dqlARN *string) error {
+	if d.Config.Local {
+		// upload images to localstack as zip files
+		err := d.UploadLambdaFunctionsLocal()
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	// upload mapper image
 	mapperURI, err := d.UploadImage(
 		ctx,

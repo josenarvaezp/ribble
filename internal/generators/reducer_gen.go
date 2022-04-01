@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 )
 
 // ReducerFunctionData defines the data needed for the template of the reducers

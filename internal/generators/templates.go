@@ -16,7 +16,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 )
 
 var c *lambdas.Coordinator
@@ -91,7 +91,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 )
 
 var c *lambdas.Coordinator
@@ -286,11 +286,11 @@ package main
 import (
 	"context"
 	"os"
-
+	
 	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 	"{{.PackagePath}}"
 )
 
@@ -403,7 +403,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 	"{{.PackagePath}}"
 )
 
@@ -520,7 +520,7 @@ import (
 	sqsTypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 	"github.com/josenarvaezp/displ/pkg/aggregators"
 )
 
@@ -747,7 +747,7 @@ import (
 	sqsTypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 	"github.com/josenarvaezp/displ/pkg/aggregators"
 	"{{.PackagePath}}"
 )
@@ -1003,7 +1003,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	sqsTypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
-	"github.com/josenarvaezp/displ/internal/lambdas"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 	"github.com/josenarvaezp/displ/pkg/aggregators"
 	log "github.com/sirupsen/logrus"
 
