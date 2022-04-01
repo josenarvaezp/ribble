@@ -31,7 +31,7 @@ func NewMapReducer(
 
 	// create config
 	if local {
-		cfg, err = config.InitLocalCfg()
+		cfg, err = config.InitLocalCfg(region)
 		if err != nil {
 			return nil, err
 		}

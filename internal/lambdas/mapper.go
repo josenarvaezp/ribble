@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"math/rand"
 	"os"
@@ -78,11 +79,14 @@ type Mapper struct {
 func NewMapper(
 	local bool,
 ) (*Mapper, error) {
+	log.Default().Println("IAM IN MAPPER")
 	var cfg *aws.Config
 	var err error
 
 	// get region from env var
 	region := os.Getenv("AWS_REGION")
+
+	log.Default().Println(region)
 
 	// init mapper
 	mapper := &Mapper{
@@ -92,7 +96,7 @@ func NewMapper(
 
 	// create config
 	if local {
-		cfg, err = config.InitLocalCfg()
+		cfg, err = config.InitLocalCfg(region)
 		if err != nil {
 			return nil, err
 		}

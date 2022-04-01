@@ -75,7 +75,7 @@ func NewSetupDriver(conf *config.Config) (*Driver, error) {
 
 	if driver.Config.Local {
 		// point clients to localstack
-		cfg, err = config.InitLocalCfg()
+		cfg, err = config.InitLocalCfg(conf.Region)
 		if err != nil {
 			return nil, err
 		}
@@ -115,7 +115,7 @@ func NewDriver(jobID uuid.UUID, conf *config.Config) (*Driver, error) {
 
 	if driver.Config.Local {
 		// point clients to localstack
-		cfg, err = config.InitLocalCfg()
+		cfg, err = config.InitLocalCfg(conf.Region)
 		if err != nil {
 			return nil, err
 		}
