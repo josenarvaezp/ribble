@@ -72,7 +72,6 @@ func (d *Driver) UploadLambdaFunctionsLocal() error {
 	// create mapper lambda function
 	if _, err := exec.Command(
 		scriptToUploadImagesLocally,
-		d.BuildData.BuildDir,
 		d.BuildData.MapperData.GeneratedFile,
 		d.BuildData.MapperData.Function,
 		d.Config.Region,
@@ -84,7 +83,6 @@ func (d *Driver) UploadLambdaFunctionsLocal() error {
 	// // create coordinator lambda function
 	if _, err := exec.Command(
 		scriptToUploadImagesLocally,
-		d.BuildData.BuildDir,
 		d.BuildData.CoordinatorData.GeneratedFile,
 		d.BuildData.CoordinatorData.Function,
 		d.Config.Region,
@@ -97,7 +95,6 @@ func (d *Driver) UploadLambdaFunctionsLocal() error {
 	for _, reducer := range d.BuildData.ReducerData {
 		if _, err := exec.Command(
 			scriptToUploadImagesLocally,
-			d.BuildData.BuildDir,
 			reducer.GeneratedFile,
 			reducer.ReducerName,
 			d.Config.Region,
