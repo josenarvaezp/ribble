@@ -31,7 +31,11 @@ func NewRandomReducer(
 
 	// create config
 	if local {
-		cfg, err = config.InitLocalCfg(region)
+		cfg, err = config.InitLocalCfg(
+			config.INTERNAL_LOCALSTACK_HOST_NAME,
+			config.LOCALSTACK_PORT,
+			region,
+		)
 		if err != nil {
 			return nil, err
 		}
