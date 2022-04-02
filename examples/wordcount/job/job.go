@@ -15,7 +15,7 @@ func main() {
 		AccountID:           "000000000000",
 		Username:            "jose",
 		LogicalSplit:        true,
-		RandomizedPartition: true,
+		RandomizedPartition: false,
 	}
 
 	// define job

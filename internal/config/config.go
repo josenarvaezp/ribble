@@ -13,6 +13,12 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const (
+	INTERNAL_LOCALSTACK_HOST_NAME = "localstack"
+	EXTERNAL_LOCALSTACK_HOST_NAME = "localhost"
+	LOCALSTACK_PORT               = 4566
+)
+
 // Config represents the configuration file specified by the user
 type Config struct {
 	InputBuckets []string `yaml:"input"`
@@ -57,11 +63,11 @@ func InitCfg(region string) (*aws.Config, error) {
 	return &cfg, nil
 }
 
-func InitLocalCfg(region string) (*aws.Config, error) {
+func InitLocalCfg(hostEndpoint string, hostPort int, region string) (*aws.Config, error) {
 	localstackEndpointResolver := aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
 		return aws.Endpoint{
 			PartitionID:   "aws",
-			URL:           "https://localhost:4566",
+			URL:           fmt.Sprintf("https://%s:%d", hostEndpoint, hostPort),
 			SigningRegion: region,
 		}, nil
 	})
