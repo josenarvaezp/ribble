@@ -173,6 +173,13 @@ var uploadCmd = &cobra.Command{
 		}
 		jobDriver.BuildData = buildData
 
+		// create log group and stream
+		err = jobDriver.CreateLogsInfra(ctx)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error creating log group and stream")
+			return
+		}
+
 		// Setting up resources
 		err = jobDriver.CreateJobBucket(ctx)
 		if err != nil {
