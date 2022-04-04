@@ -19,6 +19,11 @@ type ObjectStoreAPI interface {
 		params *s3.CreateBucketInput,
 		optFns ...func(*s3.Options),
 	) (*s3.CreateBucketOutput, error)
+	GetObject(
+		ctx context.Context,
+		params *s3.GetObjectInput,
+		optFns ...func(*s3.Options),
+	) (*s3.GetObjectOutput, error)
 }
 
 // Object represent a cloud object

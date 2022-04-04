@@ -7,19 +7,24 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	cloudWatchTypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	sqsTypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/google/uuid"
 	"github.com/josenarvaezp/displ/internal/config"
 	"github.com/josenarvaezp/displ/internal/faas"
+	"github.com/josenarvaezp/displ/internal/logs"
 	"github.com/josenarvaezp/displ/internal/objectstore"
 	"github.com/josenarvaezp/displ/internal/queues"
 )
@@ -45,9 +50,11 @@ type CoordinatorAPI interface {
 type Coordinator struct {
 	JobID uuid.UUID
 	// clients
-	QueuesAPI   queues.QueuesAPI
-	FaasAPI     faas.FaasAPI
-	UploaderAPI objectstore.ManagerUploaderAPI
+	QueuesAPI      queues.QueuesAPI
+	FaasAPI        faas.FaasAPI
+	UploaderAPI    objectstore.ManagerUploaderAPI
+	LogsAPI        logs.LogsAPI
+	ObjectStoreAPI objectstore.ObjectStoreAPI
 	// metadata
 	Region     string
 	AccountID  string
@@ -100,6 +107,10 @@ func NewCoordinator(
 		o.UsePathStyle = true
 	})
 	coordinator.UploaderAPI = manager.NewUploader(s3Client)
+	coordinator.ObjectStoreAPI = s3Client
+
+	// create logs client
+	coordinator.LogsAPI = cloudwatchlogs.NewFromConfig(*cfg)
 
 	return coordinator, err
 }
@@ -122,7 +133,7 @@ func (c *Coordinator) UpdateCoordinatorWithRequest(ctx context.Context, request 
 
 // AreMappersDone reads events from the mapper-done queue to check
 // if all mappers are done
-func (c *Coordinator) AreMappersDone(ctx context.Context) error {
+func (c *Coordinator) AreMappersDone(ctx context.Context, nextLogToken *string) (*string, error) {
 	queueName := fmt.Sprintf("%s-mappers-done", c.JobID.String())
 	queueURL := GetQueueURL(queueName, c.Region, c.AccountID, c.local)
 	params := &sqs.ReceiveMessageInput{
@@ -139,7 +150,7 @@ func (c *Coordinator) AreMappersDone(ctx context.Context) error {
 		// mappers are not done yet
 		output, err := c.QueuesAPI.ReceiveMessage(ctx, params)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		for _, message := range output.Messages {
@@ -150,11 +161,19 @@ func (c *Coordinator) AreMappersDone(ctx context.Context) error {
 			}
 		}
 
-		// sleep for 10 seconds before trying to get more results
-		time.Sleep(10 * time.Second)
+		if mappersCompleted, err := c.GetNumMessagesInQueue(ctx, queueURL); err == nil {
+			nextLogToken, _ = c.LogEvent(
+				ctx,
+				fmt.Sprintf("Mappers completed: %d/%d", mappersCompleted, c.NumMappers),
+				nextLogToken,
+			)
+		}
+
+		// sleep for 5 seconds before trying to get more results
+		time.Sleep(5 * time.Second)
 	}
 
-	return nil
+	return nextLogToken, nil
 }
 
 // InvokeReducers is used to invoke the reducers once all mappers are done
@@ -253,7 +272,7 @@ func (c *Coordinator) InvokeReducer(ctx context.Context, reducerName string) err
 
 // AreReducersDone reads events from the reducers-done queue to check
 // if all reducers are done
-func (c *Coordinator) AreReducersDone(ctx context.Context) error {
+func (c *Coordinator) AreReducersDone(ctx context.Context, nextLogToken *string) (*string, error) {
 	queueName := fmt.Sprintf("%s-reducers-done", c.JobID.String())
 	queueURL := GetQueueURL(queueName, c.Region, c.AccountID, c.local)
 	params := &sqs.ReceiveMessageInput{
@@ -270,7 +289,7 @@ func (c *Coordinator) AreReducersDone(ctx context.Context) error {
 		// reducers are not done yet
 		output, err := c.QueuesAPI.ReceiveMessage(ctx, params)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		for _, message := range output.Messages {
@@ -281,11 +300,19 @@ func (c *Coordinator) AreReducersDone(ctx context.Context) error {
 			}
 		}
 
-		// sleep for 10 seconds before trying to get more results
-		time.Sleep(10 * time.Second)
+		if reducersCompleted, err := c.GetNumMessagesInQueue(ctx, queueURL); err == nil {
+			nextLogToken, _ = c.LogEvent(
+				ctx,
+				fmt.Sprintf("Reducers completed: %d/%d", reducersCompleted, c.NumQueues),
+				nextLogToken,
+			)
+		}
+
+		// sleep for 5 seconds before trying to get more results
+		time.Sleep(5 * time.Second)
 	}
 
-	return nil
+	return nextLogToken, nil
 }
 
 // WriteDoneObject writes a blank object to indicate that the job has finished
@@ -305,4 +332,77 @@ func (c *Coordinator) WriteDoneObject(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// GetNumMessagesInQueue gets the approximate number of messages in a queue
+func (c *Coordinator) GetNumMessagesInQueue(ctx context.Context, queueURL string) (int, error) {
+	res, _ := c.QueuesAPI.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+		QueueUrl: &queueURL,
+		AttributeNames: []sqsTypes.QueueAttributeName{
+			sqsTypes.QueueAttributeNameApproximateNumberOfMessages,
+			sqsTypes.QueueAttributeNameApproximateNumberOfMessagesDelayed,
+			sqsTypes.QueueAttributeNameApproximateNumberOfMessagesNotVisible,
+		},
+	})
+	totalMappersStr := res.Attributes["ApproximateNumberOfMessages"]
+	totalMappersStr = totalMappersStr + res.Attributes["ApproximateNumberOfMessagesDelayed"]
+	totalMappersStr = totalMappersStr + res.Attributes["ApproximateNumberOfMessagesNotVisible"]
+
+	return strconv.Atoi(totalMappersStr)
+}
+
+// LogEvents logs multiple events to cloudwatch
+func (c *Coordinator) LogEvents(ctx context.Context, messages []string, nextSequenceToken *string) (*string, error) {
+	// log data
+	logGroupName := fmt.Sprintf("%s-log-group", c.JobID.String())
+	logStreamName := fmt.Sprintf("%s-log-stream", c.JobID.String())
+	currentTime := time.Now().Unix()
+
+	// add messages
+	events := make([]cloudWatchTypes.InputLogEvent, len(messages))
+	for i, message := range messages {
+		events[i] = cloudWatchTypes.InputLogEvent{
+			Message:   &message,
+			Timestamp: &currentTime,
+		}
+	}
+
+	// send logs
+	logRes, err := c.LogsAPI.PutLogEvents(ctx, &cloudwatchlogs.PutLogEventsInput{
+		LogEvents:     events,
+		LogGroupName:  &logGroupName,
+		LogStreamName: &logStreamName,
+		SequenceToken: nextSequenceToken,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return logRes.NextSequenceToken, nil
+}
+
+// LogEvents logs a single event to cloudwatch
+func (c *Coordinator) LogEvent(ctx context.Context, message string, nextSequenceToken *string) (*string, error) {
+	// log data
+	logGroupName := fmt.Sprintf("%s-log-group", c.JobID.String())
+	logStreamName := fmt.Sprintf("%s-log-stream", c.JobID.String())
+	currentTime := time.Now().Unix()
+
+	// send logs
+	logRes, err := c.LogsAPI.PutLogEvents(ctx, &cloudwatchlogs.PutLogEventsInput{
+		LogEvents: []cloudWatchTypes.InputLogEvent{
+			{
+				Message:   &message,
+				Timestamp: &currentTime,
+			},
+		},
+		LogGroupName:  &logGroupName,
+		LogStreamName: &logStreamName,
+		SequenceToken: nextSequenceToken,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return logRes.NextSequenceToken, nil
 }

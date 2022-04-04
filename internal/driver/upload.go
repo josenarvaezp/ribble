@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -213,6 +214,31 @@ func (d *Driver) CreateLambdaFunction(ctx context.Context, imageName, imageTag s
 	})
 
 	return err
+}
+
+// CreateLogs creates a log group and creates a log stream
+// for the job
+func (d *Driver) CreateLogsInfra(ctx context.Context) error {
+	// create log group
+	logGroupName := fmt.Sprintf("%s-log-group", d.JobID.String())
+	_, err := d.LogsAPI.CreateLogGroup(ctx, &cloudwatchlogs.CreateLogGroupInput{
+		LogGroupName: &logGroupName,
+	})
+	if err != nil {
+		return err
+	}
+
+	// create log stream
+	logStreamName := fmt.Sprintf("%s-log-stream", d.JobID.String())
+	_, err = d.LogsAPI.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
+		LogGroupName:  &logGroupName,
+		LogStreamName: &logStreamName,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // repoAlreadyExists checks if the ecr repo being created already exists

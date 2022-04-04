@@ -8,6 +8,7 @@ import (
 	"github.com/josenarvaezp/displ/internal/config"
 	"github.com/josenarvaezp/displ/internal/faas"
 	"github.com/josenarvaezp/displ/internal/generators"
+	"github.com/josenarvaezp/displ/internal/logs"
 	"github.com/josenarvaezp/displ/internal/objectstore"
 	"github.com/josenarvaezp/displ/internal/queues"
 	"github.com/josenarvaezp/displ/internal/repo"
@@ -16,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -56,6 +58,7 @@ type Driver struct {
 	QueuesAPI      queues.QueuesAPI
 	ImageRepoAPI   repo.ImageRepoAPI
 	IamAPI         access.IamAPI
+	LogsAPI        logs.LogsAPI
 	// user config
 	Config    config.Config
 	BuildData *generators.BuildData
@@ -158,6 +161,9 @@ func NewDriver(jobID uuid.UUID, conf *config.Config) (*Driver, error) {
 	driver.FaasAPI = lambda.NewFromConfig(*cfg)
 	driver.QueuesAPI = sqs.NewFromConfig(*cfg)
 	driver.ImageRepoAPI = ecr.NewFromConfig(*cfg)
+
+	// create logs client
+	driver.LogsAPI = cloudwatchlogs.NewFromConfig(*cfg)
 
 	return driver, nil
 }

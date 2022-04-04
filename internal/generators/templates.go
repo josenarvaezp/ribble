@@ -12,6 +12,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/sirupsen/logrus"
@@ -34,6 +35,16 @@ func init() {
 }
 
 func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error {
+	// log init
+	nextLogToken, _ := c.LogEvents(
+		ctx,
+		[]string{
+			"Coordinator starting...",
+			fmt.Sprintf("Waiting for %d mappers...", request.NumMappers),
+		},
+		nil, // empty token as it is the first log
+	)
+	
 	// update coordinator
 	c.UpdateCoordinatorWithRequest(ctx, request)
 
@@ -43,10 +54,21 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 	})
 
 	// waits until mappers are done
-	if err := c.AreMappersDone(ctx); err != nil {
+	nextLogToken, err := c.AreMappersDone(ctx, nextLogToken)
+	if err != nil {
 		coordinatorLogger.WithError(err).Error("Error reading mappers done queue")
 		return err
 	}
+
+	// log mappers done
+	nextLogToken, _ = c.LogEvents(
+		ctx,
+		[]string{
+			"Mappers execution completed...",
+			fmt.Sprintf("Waiting for %d reducers...", request.NumQueues),
+		},
+		nextLogToken,
+	)
 
 	// invoke reducers
 	if err := c.InvokeReducers(ctx, "{{.LambdaAggregator}}"); err != nil {
@@ -55,10 +77,24 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 	}
 
 	// wait until reducers are done
-	if err := c.AreReducersDone(ctx); err != nil {
+	nextLogToken, err = c.AreReducersDone(ctx, nextLogToken)
+	if err != nil {
 		coordinatorLogger.WithError(err).Error("Error reading reducers done queue")
 		return err
 	}
+
+	// log reducers done
+	nextLogToken, _ = c.LogEvents(
+		ctx,
+		[]string{
+			"Reducers execution completed...",
+			fmt.Sprintf(
+				"Job completed successfully, output is available at the S3 bucket %s...",
+				c.JobID.String(),
+			),
+		},
+		nextLogToken,
+	)
 
 	// indicate reducers are done
 	if err := c.WriteDoneObject(ctx); err != nil {
@@ -87,7 +123,11 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-lambda-go/lambda"
 	log "github.com/sirupsen/logrus"
 
@@ -109,6 +149,16 @@ func init() {
 }
 
 func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error {
+	// log init
+	nextLogToken, _ := c.LogEvents(
+		ctx,
+		[]string{
+			"Coordinator starting...",
+			fmt.Sprintf("Waiting for %d mappers...", request.NumMappers),
+		},
+		nil, // empty token as it is the first log
+	)
+	
 	// update coordinator
 	c.UpdateCoordinatorWithRequest(ctx, request)
 
@@ -118,10 +168,21 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 	})
 
 	// waits until mappers are done
-	if err := c.AreMappersDone(ctx); err != nil {
+	nextLogToken, err := c.AreMappersDone(ctx, nextLogToken)
+	if err != nil {
 		coordinatorLogger.WithError(err).Error("Error reading mappers done queue")
 		return err
 	}
+
+	// log mappers done
+	nextLogToken, _ = c.LogEvents(
+		ctx,
+		[]string{
+			"Mappers execution completed...",
+			fmt.Sprintf("Waiting for %d reducers...", request.NumQueues),
+		},
+		nextLogToken,
+	)
 
 	// invoke reducers
 	if err := c.InvokeReducers(ctx, "{{.LambdaAggregator}}"); err != nil {
@@ -130,16 +191,59 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 	}
 
 	// wait until reducers are done
-	if err := c.AreReducersDone(ctx); err != nil {
+	nextLogToken, err = c.AreReducersDone(ctx, nextLogToken)
+	if err != nil {
 		coordinatorLogger.WithError(err).Error("Error reading reducers done queue")
 		return err
 	}
+
+	// log reducers done
+	nextLogToken, _ = c.LogEvents(
+		ctx,
+		[]string{
+			"Reducers execution completed...",
+			"Waiting for final reducer...",
+		},
+		nextLogToken,
+	)
 
 	// invoke final reducer
 	if err := c.InvokeReducer(ctx, "{{.LambdaFinalAggregator}}"); err != nil {
 		coordinatorLogger.WithError(err).Error("Error invoking final reducer")
 		return nil
 	}
+
+	// wait until job is done
+	jobBucket := c.JobID.String()
+	key := "output"
+	bytes := fmt.Sprintf("bytes=%d-%d", 0, 1)
+	for true {
+		_, err := c.ObjectStoreAPI.GetObject(ctx, &s3.GetObjectInput{
+			Bucket: &jobBucket,
+			Key:    &key,
+			Range:  aws.String(bytes),
+		})
+		if err != nil {
+			// sleep for 5 seconds before trying to get the object
+			time.Sleep(5 * time.Second)
+			break
+		}
+
+		// job done
+	}
+
+	// log job done
+	nextLogToken, _ = c.LogEvents(
+		ctx,
+		[]string{
+			"Final reducer execution completed...",
+			fmt.Sprintf(
+				"Job completed successfully, output is available at the S3 bucket %s...",
+				c.JobID.String(),
+			),
+		},
+		nextLogToken,
+	)
 
 	return nil
 }
