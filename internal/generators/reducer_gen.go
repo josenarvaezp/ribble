@@ -6,9 +6,11 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"text/template"
 
+	"github.com/josenarvaezp/displ/pkg/aggregators"
 	"github.com/josenarvaezp/displ/pkg/lambdas"
 )
 
@@ -19,7 +21,9 @@ type ReducerFunctionData struct {
 	PackageName    string `yaml:"PackageName,omitempty"`
 	GeneratedFile  string `yaml:"GeneratedFile,omitempty"`
 	FilterFunction string `yaml:"FilterFunction,omitempty"`
+	WithFilter     bool   `yaml:"WithFilter,omitempty"`
 	SortFunction   string `yaml:"SortFunction,omitempty"`
+	WithSort       bool   `yaml:"WithSort,omitempty"`
 	ImageName      string `yaml:"ImageName,omitempty"`
 	ImageTag       string `yaml:"ImageTag,omitempty"`
 	Dockefile      string `yaml:"Dockerfile,omitempty"`
@@ -28,7 +32,13 @@ type ReducerFunctionData struct {
 
 // GetReducerData gets as input an interface that should be a function
 // and gets the function's package information and the function name
-func GetReducerData(filter interface{}, sort interface{}, randomizedPartition bool, jobID string, local bool) []*ReducerFunctionData {
+func GetReducerData(
+	filter func(aggregators.MapAggregator) aggregators.MapAggregator,
+	sort func(aggregators.MapAggregator) sort.Interface,
+	randomizedPartition bool,
+	jobID string,
+	local bool,
+) []*ReducerFunctionData {
 	functionData := []*ReducerFunctionData{}
 	if randomizedPartition {
 		// add final and random reducers data
@@ -80,6 +90,7 @@ func GetReducerData(filter interface{}, sort interface{}, randomizedPartition bo
 	}
 
 	if filter != nil {
+		functionData[0].WithFilter = true
 		// get info for filter
 		filterFullName := runtime.FuncForPC(reflect.ValueOf(filter).Pointer()).Name()
 		filterLenFullName := len(filterFullName)
@@ -96,9 +107,12 @@ func GetReducerData(filter interface{}, sort interface{}, randomizedPartition bo
 
 		functionData[0].PackagePath = packagePath
 		functionData[0].PackageName = packageName
+	} else {
+		functionData[0].WithFilter = false
 	}
 
 	if sort != nil {
+		functionData[0].WithSort = true
 		// get info for sorting
 		sortFullName := runtime.FuncForPC(reflect.ValueOf(sort).Pointer()).Name()
 		sortLenFullName := len(sortFullName)
@@ -115,6 +129,8 @@ func GetReducerData(filter interface{}, sort interface{}, randomizedPartition bo
 
 		functionData[0].PackagePath = packagePath
 		functionData[0].PackageName = packageName
+	} else {
+		functionData[0].WithSort = false
 	}
 
 	return functionData

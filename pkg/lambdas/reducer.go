@@ -108,8 +108,8 @@ func (r *Reducer) UpdateReducerWithRequest(ctx context.Context, request ReducerI
 	return nil
 }
 
-// WriteReducerOutput writes the output of the reducer to objectstore
-func (r *Reducer) WriteFinalReducerOutput(ctx context.Context, output sort.Interface, key string) error {
+// WriteSortedReducerOutput writes the output of the reducer to objectstore
+func (r *Reducer) WriteSortedReducerOutput(ctx context.Context, output sort.Interface, key string) error {
 	// encode map to JSON
 	p, err := json.Marshal(output)
 	if err != nil {

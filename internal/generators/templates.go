@@ -749,7 +749,10 @@ import (
 
 	"github.com/josenarvaezp/displ/pkg/lambdas"
 	"github.com/josenarvaezp/displ/pkg/aggregators"
+
+	{{ if or .WithFilter .WithSort }} 
 	"{{.PackagePath}}"
+	{{ end }}
 )
 
 var r *lambdas.Reducer
@@ -954,19 +957,32 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 
 	wg.Wait()
 
+	{{if .WithFilter}}
 	// filter results
-	filteredOutput := lambdas.RunFilter(r.Output, {{.PackageName}}.{{.FilterFunction}})
+	r.Output = lambdas.RunFilter(r.Output, {{.PackageName}}.{{.FilterFunction}})
+	{{end}}
 
-	// sort output
-	sortedOutput := lambdas.RunSort(filteredOutput, {{.PackageName}}.{{.SortFunction}})
-
-	// write reducer output
+	// generate key for output
 	key := fmt.Sprintf("output/%s", r.ReducerID.String())
-	err = r.WriteFinalReducerOutput(ctx, sortedOutput, key)
+	
+	{{if .WithSort}}
+	// sort output
+	sortedOutput := lambdas.RunSort(r.Output, {{.PackageName}}.{{.SortFunction}})
+
+	// write sorted reducer output
+	err = r.WriteSortedReducerOutput(ctx, sortedOutput, key)
 	if err != nil {
 		reducerLogger.WithError(err).Error("Error writing reducer output")
 		return err
 	}
+	{{ else }}
+	// write unsorted reducer output
+	err = r.WriteReducerOutput(ctx, r.Output, key)
+	if err != nil {
+		reducerLogger.WithError(err).Error("Error writing reducer output")
+		return err
+	}
+	{{end}}
 
 	// indicate reducer has finished
 	err = r.SendFinishedEvent(ctx)
@@ -1007,7 +1023,9 @@ import (
 	"github.com/josenarvaezp/displ/pkg/aggregators"
 	log "github.com/sirupsen/logrus"
 
+	{{ if or .WithFilter .WithSort }} 
 	"{{.PackagePath}}"
+	{{ end }}
 )
 
 var r *lambdas.Reducer
@@ -1181,19 +1199,32 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 
 	wg.Wait()
 
+	{{if .WithFilter}}
 	// filter results
-	filteredOutput := lambdas.RunFilter(r.Output, {{.PackageName}}.{{.FilterFunction}})
+	r.Output = lambdas.RunFilter(r.Output, {{.PackageName}}.{{.FilterFunction}})
+	{{end}}
 
+	// generate key for output
+	key := "output"
+	
+	{{if .WithSort}}
 	// sort output
-	sortedOutput := lambdas.RunSort(filteredOutput, {{.PackageName}}.{{.SortFunction}})
+	sortedOutput := lambdas.RunSort(r.Output, {{.PackageName}}.{{.SortFunction}})
 
-	// write reducer output
-	key := fmt.Sprintf("output")
-	err = r.WriteFinalReducerOutput(ctx, sortedOutput, key)
+	// write sorted reducer output
+	err = r.WriteSortedReducerOutput(ctx, sortedOutput, key)
 	if err != nil {
 		reducerLogger.WithError(err).Error("Error writing reducer output")
 		return err
 	}
+	{{ else }}
+	// write unsorted reducer output
+	err = r.WriteReducerOutput(ctx, r.Output, key)
+	if err != nil {
+		reducerLogger.WithError(err).Error("Error writing reducer output")
+		return err
+	}
+	{{end}}
 
 	return nil
 }
