@@ -23,4 +23,9 @@ type LogsAPI interface {
 		params *cloudwatchlogs.PutLogEventsInput,
 		optFns ...func(*cloudwatchlogs.Options),
 	) (*cloudwatchlogs.PutLogEventsOutput, error)
+	GetLogEvents(
+		ctx context.Context,
+		params *cloudwatchlogs.GetLogEventsInput,
+		optFns ...func(*cloudwatchlogs.Options),
+	) (*cloudwatchlogs.GetLogEventsOutput, error)
 }
