@@ -25,6 +25,7 @@ var (
 	region    string
 	verbose   *int
 	local     bool
+	logsSleep int32
 )
 
 func main() {
@@ -32,6 +33,7 @@ func main() {
 	rootCmd.AddCommand(uploadCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(setCredsCmd)
+	rootCmd.AddCommand(logsCmd)
 
 	setCredsCmd.PersistentFlags().StringVar(&accountID, "account-id", "", "AWS account id")
 	setCredsCmd.PersistentFlags().StringVar(&username, "username", "", "AWS username")
@@ -51,6 +53,10 @@ func main() {
 	runCmd.PersistentFlags().StringVar(&jobID, "job-id", "", "id of job to run")
 	runCmd.MarkPersistentFlagRequired("job-id")
 	runCmd.Flags().CountP("verbose", "v", "counted verbosity")
+
+	logsCmd.PersistentFlags().StringVar(&jobID, "job-id", "", "id of job to run")
+	logsCmd.PersistentFlags().Int32Var(&logsSleep, "sleep", 60, "time in seconds for fetching logs")
+	logsCmd.MarkPersistentFlagRequired("job-id")
 
 	rootCmd.Execute()
 }
@@ -348,45 +354,42 @@ var setCredsCmd = &cobra.Command{
 	},
 }
 
-// var logsCmd = &cobra.Command{
-// 	Use:   "logs",
-// 	Short: "Get job logs",
-// 	Long:  `Get job logs`,
-// 	Run: func(cmd *cobra.Command, args []string) {
-// 		ctx := context.Background()
+var logsCmd = &cobra.Command{
+	Use:   "logs",
+	Short: "Get job logs",
+	Long:  `Get job logs`,
+	Run: func(cmd *cobra.Command, args []string) {
+		ctx := context.Background()
 
-// 		// get verbosity for logs
-// 		verbosity, _ := cmd.Flags().GetCount("verbose")
-// 		logrus.SetLevel(logs.ConfigLogLevelToLevel(verbosity))
+		// get driver config values
+		configFile := fmt.Sprintf("%s/%s/config.yaml", generators.GeneratedFilesDir, jobID)
+		conf, err := config.ReadLocalConfigFile(configFile)
+		if err != nil {
+			logrus.WithField(
+				"File name", configFile,
+			).WithError(err).Error("Error reading config file")
+			return
+		}
 
-// 		// get driver config values
-// 		configFile := fmt.Sprintf("%s/%s/config.yaml", generators.GeneratedFilesDir, jobID)
-// 		conf, err := config.ReadLocalConfigFile(configFile)
-// 		if err != nil {
-// 			logrus.WithField(
-// 				"File name", configFile,
-// 			).WithError(err).Error("Error reading config file")
-// 			return
-// 		}
+		// add job path info to driver
+		jobID, err := uuid.Parse(jobID)
+		if err != nil {
+			logrus.WithError(err).Error("Error parsing ID, it must be an uuid")
+			return
+		}
 
-// 		// add job path info to driver
-// 		jobID, err := uuid.Parse(jobID)
-// 		if err != nil {
-// 			logrus.WithError(err).Error("Error parsing ID, it must be an uuid")
-// 			return
-// 		}
+		// set driver
+		jobDriver, err := driver.NewDriver(jobID, conf)
+		if err != nil {
+			logrus.WithError(err).Error("Error initializing driver")
+			return
+		}
+		jobDriver.JobID = jobID
 
-// 		// set driver
-// 		jobDriver, err := driver.NewDriver(jobID, conf)
-// 		if err != nil {
-// 			logrus.WithError(err).Error("Error initializing driver")
-// 			return
-// 		}
-// 		jobDriver.JobID = jobID
-
-// 		// driverLogger := logrus.WithFields(logrus.Fields{
-// 		// 	"Job ID": jobID.String(),
-// 		// })
-
-// 	},
-// }
+		err = jobDriver.ReadRibbleLogs(ctx, logsSleep)
+		if err != nil {
+			logrus.WithError(err).Error("Error reading logs")
+			return
+		}
+	},
+}
