@@ -362,19 +362,25 @@ func (c *Coordinator) LogEvents(ctx context.Context, messages []string, nextSequ
 	// add messages
 	events := make([]cloudWatchTypes.InputLogEvent, len(messages))
 	for i, message := range messages {
+		currentMessage := message
 		events[i] = cloudWatchTypes.InputLogEvent{
-			Message:   &message,
+			Message:   &currentMessage,
 			Timestamp: &currentTimeMilli,
 		}
 	}
-
-	// send logs
-	logRes, err := c.LogsAPI.PutLogEvents(ctx, &cloudwatchlogs.PutLogEventsInput{
+	input := &cloudwatchlogs.PutLogEventsInput{
 		LogEvents:     events,
 		LogGroupName:  &logGroupName,
 		LogStreamName: &logStreamName,
-		SequenceToken: nextSequenceToken,
-	})
+	}
+
+	// add next sequence token
+	if nextSequenceToken != nil {
+		input.SequenceToken = nextSequenceToken
+	}
+
+	// send logs
+	logRes, err := c.LogsAPI.PutLogEvents(ctx, input)
 	if err != nil {
 		return nil, err
 	}
@@ -390,8 +396,7 @@ func (c *Coordinator) LogEvent(ctx context.Context, message string, nextSequence
 	currentTimeNano := time.Now().UnixNano()
 	currentTimeMilli := currentTimeNano / 1000000
 
-	// send logs
-	logRes, err := c.LogsAPI.PutLogEvents(ctx, &cloudwatchlogs.PutLogEventsInput{
+	input := &cloudwatchlogs.PutLogEventsInput{
 		LogEvents: []cloudWatchTypes.InputLogEvent{
 			{
 				Message:   &message,
@@ -400,8 +405,15 @@ func (c *Coordinator) LogEvent(ctx context.Context, message string, nextSequence
 		},
 		LogGroupName:  &logGroupName,
 		LogStreamName: &logStreamName,
-		SequenceToken: nextSequenceToken,
-	})
+	}
+
+	// add next sequence token
+	if nextSequenceToken != nil {
+		input.SequenceToken = nextSequenceToken
+	}
+
+	// send logs
+	logRes, err := c.LogsAPI.PutLogEvents(ctx, input)
 	if err != nil {
 		return nil, err
 	}
