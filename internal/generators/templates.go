@@ -35,6 +35,14 @@ func init() {
 }
 
 func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error {
+	// update coordinator
+	c.UpdateCoordinatorWithRequest(ctx, request)
+
+	// set coordinator logger
+	coordinatorLogger := log.WithFields(log.Fields{
+		"Job ID": c.JobID.String(),
+	})
+
 	// log init
 	nextLogToken, _ := c.LogEvents(
 		ctx,
@@ -44,14 +52,6 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 		},
 		nil, // empty token as it is the first log
 	)
-	
-	// update coordinator
-	c.UpdateCoordinatorWithRequest(ctx, request)
-
-	// set coordinator logger
-	coordinatorLogger := log.WithFields(log.Fields{
-		"Job ID": c.JobID.String(),
-	})
 
 	// waits until mappers are done
 	nextLogToken, err := c.AreMappersDone(ctx, nextLogToken)
@@ -149,6 +149,14 @@ func init() {
 }
 
 func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error {
+	// update coordinator
+	c.UpdateCoordinatorWithRequest(ctx, request)
+
+	// set coordinator logger
+	coordinatorLogger := log.WithFields(log.Fields{
+		"Job ID": c.JobID.String(),
+	})
+
 	// log init
 	nextLogToken, _ := c.LogEvents(
 		ctx,
@@ -158,14 +166,6 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 		},
 		nil, // empty token as it is the first log
 	)
-	
-	// update coordinator
-	c.UpdateCoordinatorWithRequest(ctx, request)
-
-	// set coordinator logger
-	coordinatorLogger := log.WithFields(log.Fields{
-		"Job ID": c.JobID.String(),
-	})
 
 	// waits until mappers are done
 	nextLogToken, err := c.AreMappersDone(ctx, nextLogToken)
