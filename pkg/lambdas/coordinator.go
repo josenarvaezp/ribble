@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -134,6 +135,8 @@ func (c *Coordinator) UpdateCoordinatorWithRequest(ctx context.Context, request 
 // AreMappersDone reads events from the mapper-done queue to check
 // if all mappers are done
 func (c *Coordinator) AreMappersDone(ctx context.Context, nextLogToken *string) (*string, error) {
+	MetricsSQSReceivedMessages := 0
+
 	queueName := fmt.Sprintf("%s-mappers-done", c.JobID.String())
 	queueURL := GetQueueURL(queueName, c.Region, c.AccountID, c.local)
 	params := &sqs.ReceiveMessageInput{
@@ -152,6 +155,8 @@ func (c *Coordinator) AreMappersDone(ctx context.Context, nextLogToken *string) 
 		if err != nil {
 			return nil, err
 		}
+
+		MetricsSQSReceivedMessages = MetricsSQSReceivedMessages + 1
 
 		for _, message := range output.Messages {
 			// add mapper to done map
@@ -172,6 +177,8 @@ func (c *Coordinator) AreMappersDone(ctx context.Context, nextLogToken *string) 
 		// sleep for 5 seconds before trying to get more results
 		time.Sleep(5 * time.Second)
 	}
+
+	log.Println("Num messages received: ", MetricsSQSReceivedMessages)
 
 	return nextLogToken, nil
 }
@@ -273,6 +280,8 @@ func (c *Coordinator) InvokeReducer(ctx context.Context, reducerName string) err
 // AreReducersDone reads events from the reducers-done queue to check
 // if all reducers are done
 func (c *Coordinator) AreReducersDone(ctx context.Context, nextLogToken *string) (*string, error) {
+	MetricsSQSReceivedMessages := 0
+
 	queueName := fmt.Sprintf("%s-reducers-done", c.JobID.String())
 	queueURL := GetQueueURL(queueName, c.Region, c.AccountID, c.local)
 	params := &sqs.ReceiveMessageInput{
@@ -291,6 +300,8 @@ func (c *Coordinator) AreReducersDone(ctx context.Context, nextLogToken *string)
 		if err != nil {
 			return nil, err
 		}
+
+		MetricsSQSReceivedMessages = MetricsSQSReceivedMessages + 1
 
 		for _, message := range output.Messages {
 			// add reducer to done map
@@ -311,6 +322,8 @@ func (c *Coordinator) AreReducersDone(ctx context.Context, nextLogToken *string)
 		// sleep for 5 seconds before trying to get more results
 		time.Sleep(5 * time.Second)
 	}
+
+	log.Println("Num messages received: ", MetricsSQSReceivedMessages)
 
 	return nextLogToken, nil
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -311,6 +312,8 @@ func (r *Reducer) EmitValuesToFinalReducer(ctx context.Context) (int, error) {
 		// update message metadata
 		messageMetadata = messageMetadata + 1
 	}
+
+	log.Println("Messages sent: ", messageMetadata)
 
 	return messageMetadata, nil
 }
