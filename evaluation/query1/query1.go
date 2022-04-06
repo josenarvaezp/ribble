@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -72,7 +73,7 @@ func TestQuery1(filename string) aggregators.MapAggregator {
 	defer file.Close()
 
 	// init output map
-	output := make(aggregators.MapAggregator)
+	output := aggregators.NewMap()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -97,7 +98,7 @@ func TestQuery1(filename string) aggregators.MapAggregator {
 
 		// group by fields
 		returnflag := fields[L_RETURNFLAG]
-		returnstatus := fields[L_LINESTATUS]
+		linestatus := fields[L_LINESTATUS]
 
 		// retrieve values as integers
 		quantity, err := convertToFloat(fields[L_QUANTITY])
@@ -123,14 +124,14 @@ func TestQuery1(filename string) aggregators.MapAggregator {
 		discPrice := extendedPrice * (1 - discount)
 		charge := extendedPrice * (1 - discount) * (1 + tax)
 
-		sumQuantityKey := fmt.Sprintf("%s-%s-l_quantity_sum", returnflag, returnstatus)
-		sumBasePriceKey := fmt.Sprintf("%s-%s-l_base_price_sum", returnflag, returnstatus)
-		sumDiscPriceKey := fmt.Sprintf("%s-%s-l_disc_price_sum", returnflag, returnstatus)
-		sumChargeKey := fmt.Sprintf("%s-%s-l_charge_sum", returnflag, returnstatus)
-		avgQuantityKey := fmt.Sprintf("%s-%s-quantity_avg", returnflag, returnstatus)
-		avgPriceKey := fmt.Sprintf("%s-%s-avg_price", returnflag, returnstatus)
-		avgDiscKey := fmt.Sprintf("%s-%s-avg_disc", returnflag, returnstatus)
-		sumCountKey := fmt.Sprintf("%s-%s-count", returnflag, returnstatus)
+		sumQuantityKey := fmt.Sprintf("%s-%s-l_quantity_sum", returnflag, linestatus)
+		sumBasePriceKey := fmt.Sprintf("%s-%s-l_base_price_sum", returnflag, linestatus)
+		sumDiscPriceKey := fmt.Sprintf("%s-%s-l_disc_price_sum", returnflag, linestatus)
+		sumChargeKey := fmt.Sprintf("%s-%s-l_charge_sum", returnflag, linestatus)
+		avgQuantityKey := fmt.Sprintf("%s-%s-quantity_avg", returnflag, linestatus)
+		avgPriceKey := fmt.Sprintf("%s-%s-avg_price", returnflag, linestatus)
+		avgDiscKey := fmt.Sprintf("%s-%s-avg_disc", returnflag, linestatus)
+		sumCountKey := fmt.Sprintf("%s-%s-count", returnflag, linestatus)
 
 		// sum values
 		output.AddSum(sumQuantityKey, quantity)
@@ -157,4 +158,39 @@ func convertToFloat(value string) (float64, error) {
 	}
 
 	return floatValue, nil
+}
+
+type AggregatorPairList []aggregators.AggregatorPair
+
+func (p AggregatorPairList) Len() int      { return len(p) }
+func (p AggregatorPairList) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
+func (p AggregatorPairList) Less(i, j int) bool {
+
+	keyArrI := strings.Split(p[i].Key, "-")
+	returnFlagI := keyArrI[0]
+	lineStatusI := keyArrI[1]
+
+	keyArrJ := strings.Split(p[j].Key, "-")
+	returnFlagJ := keyArrJ[0]
+	lineStatusJ := keyArrJ[1]
+
+	if returnFlagI == returnFlagJ {
+		return lineStatusI < lineStatusJ
+	}
+
+	return returnFlagI < returnFlagJ
+}
+
+// Sort sorts the output by value in ascending order
+func Sort(ma aggregators.MapAggregator) sort.Interface {
+	keys := make(AggregatorPairList, len(ma))
+	i := 0
+	for k, v := range ma {
+		keys[i] = aggregators.AggregatorPair{Key: k, Value: v.ToNum()}
+		i++
+	}
+
+	sort.Sort(keys)
+
+	return keys
 }
