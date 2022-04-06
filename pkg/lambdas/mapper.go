@@ -352,6 +352,8 @@ func (m *Mapper) GetRandomQueuePartition() int {
 // to random partition queues. This is used when the distribution of
 // keys is not good to create good load balancing.
 func (m *Mapper) EmitRandom(ctx context.Context, outputMap aggregators.MapAggregator, messageMetadata map[int]int64) error {
+	MetricsSQSTotalMessages := 0
+
 	for key, value := range outputMap {
 		messageID := uuid.New().String()
 
@@ -398,9 +400,13 @@ func (m *Mapper) EmitRandom(ctx context.Context, outputMap aggregators.MapAggreg
 			return err
 		}
 
+		MetricsSQSTotalMessages = MetricsSQSTotalMessages + 1
+
 		// update message metadata
 		messageMetadata[partitionQueue] = messageMetadata[partitionQueue] + int64(1)
 	}
+
+	log.Default().Println("Messages sent: ", MetricsSQSTotalMessages)
 
 	return nil
 }
