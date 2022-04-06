@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -156,6 +157,9 @@ func convertToFloat(value string) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	// keep only two decimal places
+	floatValue = (math.Round(floatValue*100) / 100)
 
 	return floatValue, nil
 }
