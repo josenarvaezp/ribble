@@ -269,6 +269,16 @@ var runCmd = &cobra.Command{
 		numMappings := len(mappings)
 		numReducers := int(math.Ceil(float64(numMappings) / 2))
 
+		totalObjects := 0
+		for _, mapping := range mappings {
+			totalObjects = totalObjects + len(mapping.Objects)
+		}
+
+		fmt.Println("Total objects", totalObjects)
+
+		fmt.Println("Number of mappers: ", numMappings)
+		fmt.Println("Number of reducers: ", numReducers)
+
 		// create streams for job
 		err = jobDriver.CreateQueues(ctx, numReducers)
 		if err != nil {

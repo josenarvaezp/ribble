@@ -177,6 +177,7 @@ func (m *Mapper) EmitMap(
 	outputMap aggregators.MapAggregator,
 	batchMetadata map[int]int64,
 ) error {
+	MetricsSQSTotalMessages := 0
 	// keep dictionary of batches to allow sending keys in batches
 	batches := make(map[int][]aggregators.ReduceMessage)
 
@@ -218,6 +219,8 @@ func (m *Mapper) EmitMap(
 				return err
 			}
 
+			MetricsSQSTotalMessages = MetricsSQSTotalMessages + 10
+
 			// update batch metadata
 			batchMetadata[partitionQueue] = batchMetadata[partitionQueue] + int64(1)
 
@@ -254,9 +257,13 @@ func (m *Mapper) EmitMap(
 			return err
 		}
 
+		MetricsSQSTotalMessages = MetricsSQSTotalMessages + 10
+
 		// update batch metadata
 		batchMetadata[key] = batchMetadata[key] + int64(1)
 	}
+
+	log.Println("Messages sent: ", MetricsSQSTotalMessages)
 
 	return nil
 }
