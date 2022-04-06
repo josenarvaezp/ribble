@@ -313,7 +313,7 @@ func (r *Reducer) EmitValuesToFinalReducer(ctx context.Context) (int, error) {
 		messageMetadata = messageMetadata + 1
 	}
 
-	log.Println("Messages sent: ", messageMetadata)
+	log.Default().Println("Messages sent: ", messageMetadata)
 
 	return messageMetadata, nil
 }

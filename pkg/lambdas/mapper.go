@@ -79,14 +79,11 @@ type Mapper struct {
 func NewMapper(
 	local bool,
 ) (*Mapper, error) {
-	log.Default().Println("IAM IN MAPPER")
 	var cfg *aws.Config
 	var err error
 
 	// get region from env var
 	region := os.Getenv("AWS_REGION")
-
-	log.Default().Println(region)
 
 	// init mapper
 	mapper := &Mapper{
@@ -263,7 +260,7 @@ func (m *Mapper) EmitMap(
 		batchMetadata[key] = batchMetadata[key] + int64(1)
 	}
 
-	log.Println("Messages sent: ", MetricsSQSTotalMessages)
+	log.Default().Println("Messages sent: ", MetricsSQSTotalMessages)
 
 	return nil
 }

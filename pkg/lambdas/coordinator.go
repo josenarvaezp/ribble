@@ -178,7 +178,7 @@ func (c *Coordinator) AreMappersDone(ctx context.Context, nextLogToken *string) 
 		time.Sleep(5 * time.Second)
 	}
 
-	log.Println("Num messages received: ", MetricsSQSReceivedMessages)
+	log.Default().Println("Num messages received: ", MetricsSQSReceivedMessages)
 
 	return nextLogToken, nil
 }
@@ -323,7 +323,7 @@ func (c *Coordinator) AreReducersDone(ctx context.Context, nextLogToken *string)
 		time.Sleep(5 * time.Second)
 	}
 
-	log.Println("Num messages received: ", MetricsSQSReceivedMessages)
+	log.Default().Println("Num messages received: ", MetricsSQSReceivedMessages)
 
 	return nextLogToken, nil
 }
