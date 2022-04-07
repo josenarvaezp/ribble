@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -135,8 +134,6 @@ func (c *Coordinator) UpdateCoordinatorWithRequest(ctx context.Context, request 
 // AreMappersDone reads events from the mapper-done queue to check
 // if all mappers are done
 func (c *Coordinator) AreMappersDone(ctx context.Context, nextLogToken *string) (*string, error) {
-	MetricsSQSReceivedMessages := 0
-
 	queueName := fmt.Sprintf("%s-mappers-done", c.JobID.String())
 	queueURL := GetQueueURL(queueName, c.Region, c.AccountID, c.local)
 	params := &sqs.ReceiveMessageInput{
@@ -156,7 +153,32 @@ func (c *Coordinator) AreMappersDone(ctx context.Context, nextLogToken *string) 
 			return nil, err
 		}
 
-		MetricsSQSReceivedMessages = MetricsSQSReceivedMessages + 1
+		if len(output.Messages) != 0 {
+			// at least some mappers have completed
+			for _, message := range output.Messages {
+				// add mapper to done map
+				if _, ok := doneMappers[*message.Body]; !ok {
+					doneMappers[*message.Body] = true
+					doneMappersCount++
+				}
+			}
+
+			// break and continue processing without sleep
+			break
+		}
+
+		// sleep for 5 seconds before trying to get more results
+		time.Sleep(5 * time.Second)
+	}
+
+	messagesReceived := 0
+	// loop until all mappers are done
+	for doneMappersCount < int(c.NumMappers) {
+		// mappers are not done yet
+		output, err := c.QueuesAPI.ReceiveMessage(ctx, params)
+		if err != nil {
+			return nil, err
+		}
 
 		for _, message := range output.Messages {
 			// add mapper to done map
@@ -166,19 +188,19 @@ func (c *Coordinator) AreMappersDone(ctx context.Context, nextLogToken *string) 
 			}
 		}
 
-		if mappersCompleted, err := c.GetNumMessagesInQueue(ctx, queueURL); err == nil {
-			nextLogToken, _ = c.LogEvent(
-				ctx,
-				fmt.Sprintf("Mappers completed: %d/%d", mappersCompleted, c.NumMappers),
-				nextLogToken,
-			)
+		// only log every 100 messages
+		if messagesReceived%100 == 0 {
+			if mappersCompleted, err := c.GetNumMessagesInQueue(ctx, queueURL); err == nil {
+				nextLogToken, _ = c.LogEvent(
+					ctx,
+					fmt.Sprintf("Mappers completed: %d/%d", mappersCompleted, c.NumMappers),
+					nextLogToken,
+				)
+			}
 		}
 
-		// sleep for 5 seconds before trying to get more results
-		time.Sleep(5 * time.Second)
+		messagesReceived = messagesReceived + 10
 	}
-
-	log.Default().Println("Num messages received: ", MetricsSQSReceivedMessages)
 
 	return nextLogToken, nil
 }
@@ -280,8 +302,6 @@ func (c *Coordinator) InvokeReducer(ctx context.Context, reducerName string) err
 // AreReducersDone reads events from the reducers-done queue to check
 // if all reducers are done
 func (c *Coordinator) AreReducersDone(ctx context.Context, nextLogToken *string) (*string, error) {
-	MetricsSQSReceivedMessages := 0
-
 	queueName := fmt.Sprintf("%s-reducers-done", c.JobID.String())
 	queueURL := GetQueueURL(queueName, c.Region, c.AccountID, c.local)
 	params := &sqs.ReceiveMessageInput{
@@ -301,7 +321,32 @@ func (c *Coordinator) AreReducersDone(ctx context.Context, nextLogToken *string)
 			return nil, err
 		}
 
-		MetricsSQSReceivedMessages = MetricsSQSReceivedMessages + 1
+		if len(output.Messages) != 0 {
+			// at least some reducers have completed
+			for _, message := range output.Messages {
+				// add reducer to done map
+				if _, ok := doneReducers[*message.Body]; !ok {
+					doneReducers[*message.Body] = true
+					doneReducersCount++
+				}
+			}
+
+			// break and continue processing without sleep
+			break
+		}
+
+		// sleep for 5 seconds before trying to get more results
+		time.Sleep(5 * time.Second)
+	}
+
+	messagesReceived := 0
+	// loop until all reducers are done
+	for doneReducersCount < int(c.NumQueues) {
+		// reducers are not done yet
+		output, err := c.QueuesAPI.ReceiveMessage(ctx, params)
+		if err != nil {
+			return nil, err
+		}
 
 		for _, message := range output.Messages {
 			// add reducer to done map
@@ -311,19 +356,19 @@ func (c *Coordinator) AreReducersDone(ctx context.Context, nextLogToken *string)
 			}
 		}
 
-		if reducersCompleted, err := c.GetNumMessagesInQueue(ctx, queueURL); err == nil {
-			nextLogToken, _ = c.LogEvent(
-				ctx,
-				fmt.Sprintf("Reducers completed: %d/%d", reducersCompleted, c.NumQueues),
-				nextLogToken,
-			)
+		// only log every 100 messages
+		if messagesReceived%100 == 0 {
+			if reducersCompleted, err := c.GetNumMessagesInQueue(ctx, queueURL); err == nil {
+				nextLogToken, _ = c.LogEvent(
+					ctx,
+					fmt.Sprintf("Reducers completed: %d/%d", reducersCompleted, c.NumQueues),
+					nextLogToken,
+				)
+			}
 		}
 
-		// sleep for 5 seconds before trying to get more results
-		time.Sleep(5 * time.Second)
+		messagesReceived = messagesReceived + 10
 	}
-
-	log.Default().Println("Num messages received: ", MetricsSQSReceivedMessages)
 
 	return nextLogToken, nil
 }
