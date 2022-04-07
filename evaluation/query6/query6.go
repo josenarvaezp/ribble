@@ -57,7 +57,7 @@ type values struct {
 	extendedPrice float64
 }
 
-func TestQuery6(filename string) aggregators.MapAggregator {
+func Query6(filename string) aggregators.MapAggregator {
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Fatal(err)
@@ -65,7 +65,7 @@ func TestQuery6(filename string) aggregators.MapAggregator {
 	defer file.Close()
 
 	// init output map
-	output := make(aggregators.MapAggregator)
+	output := aggregators.NewMap()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
