@@ -8,7 +8,7 @@ import (
 func main() {
 	// define job's config
 	config := ribble.Config{
-		InputBuckets:        []string{"integration-bucket"},
+		InputBuckets:        []string{"integration-test-bucket"},
 		Region:              "eu-west-2",
 		Local:               true,
 		LogLevel:            1,
