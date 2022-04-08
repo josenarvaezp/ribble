@@ -65,3 +65,10 @@ list-iam:
 	awslocal iam list-policies | grep ribble
 	awslocal iam list-policies | grep Ribble
 	awslocal iam list-roles | grep ribble
+
+test:
+	echo "hello Ribble"
+
+
+build-integration:
+	docker build -f ./build/integration_tests/Dockerfile -t integration:latest .
