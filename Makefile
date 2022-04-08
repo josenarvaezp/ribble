@@ -72,3 +72,14 @@ test:
 
 build-integration:
 	docker build -f ./build/integration_tests/Dockerfile -t integration:latest .
+
+install-aws:
+	curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+	# unzip ./awscliv2.zip
+	# sudo ./aws/install
+	# aws --version
+
+integration-s3:
+	awslocal s3 mb s3://integration-test-bucket
+	awslocal s3 cp test_lineitem.tbl.1  s3://integration-test-bucket/test_lineitem.tbl.1
+	awslocal s3 cp test_lineitem.tbl.2  s3://integration-test-bucket/test_lineitem.tbl.2
