@@ -8,7 +8,7 @@ pipeline {
 
                 // start localstack
                 timeout(time: 1, unit: 'MINUTES') {
-                    sh './build/integration-tests/localstack.sh'
+                    sh './build/integration_tests/localstack.sh'
                 }
 
                 // create integration test bucket
