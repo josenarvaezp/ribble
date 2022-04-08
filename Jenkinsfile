@@ -2,7 +2,6 @@ pipeline {
     agent none
     stages {
         stage('Build docker') {
-            agent any
             steps {
                 sh 'echo "Hello World"'
                 sh '''
