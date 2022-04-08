@@ -26,6 +26,7 @@ var (
 	verbose   *int
 	local     bool
 	logsSleep int32
+	reducers  int
 )
 
 func main() {
@@ -51,6 +52,7 @@ func main() {
 	uploadCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
 	runCmd.PersistentFlags().StringVar(&jobID, "job-id", "", "id of job to run")
+	runCmd.PersistentFlags().IntVar(&reducers, "reducers", 0, "number of reducers to use")
 	runCmd.MarkPersistentFlagRequired("job-id")
 	runCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
@@ -267,34 +269,32 @@ var runCmd = &cobra.Command{
 		}
 
 		numMappings := len(mappings)
-		numReducers := int(math.Ceil(float64(numMappings) / 2))
+		if reducers == 0 {
+			// no reducers specified
+			reducers = int(math.Ceil(float64(numMappings) / 2))
+		}
 
 		totalObjects := 0
 		for _, mapping := range mappings {
 			totalObjects = totalObjects + len(mapping.Objects)
 		}
 
-		fmt.Println("Total objects", totalObjects)
-
-		fmt.Println("Number of mappers: ", numMappings)
-		fmt.Println("Number of reducers: ", numReducers)
-
 		// create streams for job
-		err = jobDriver.CreateQueues(ctx, numReducers)
+		err = jobDriver.CreateQueues(ctx, reducers)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating the job streams")
 			return
 		}
 
 		// start coordinator
-		err = jobDriver.StartCoordinator(ctx, numMappings, numReducers)
+		err = jobDriver.StartCoordinator(ctx, numMappings, reducers)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error starting the coordinator")
 			return
 		}
 
 		// start mappers
-		err = jobDriver.StartMappers(ctx, mappings, numReducers)
+		err = jobDriver.StartMappers(ctx, mappings, reducers)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error starting the mappers")
 			return

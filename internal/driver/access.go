@@ -66,6 +66,8 @@ var (
 					"iam:GetUserPolicy",
 					"iam:GetRolePolicy"
 					"ecr:CreateRepository",
+					"ecr:SetRepositoryPolicy",
+					"ecr:GetRepositoryPolicy",
 					"logs:CreateLogStream",
                 	"logs:GetLogEvents",
 					"logs:CreateLogGroup",

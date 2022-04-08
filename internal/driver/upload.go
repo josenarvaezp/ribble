@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
@@ -195,12 +196,13 @@ func (d *Driver) UploadLambdaFunctions(ctx context.Context, dqlARN *string) erro
 
 func (d *Driver) CreateLambdaFunction(ctx context.Context, imageName, imageTag string, imageURI *string, lambdaDlqArn *string) error {
 	functionDescription := fmt.Sprintf("Ribble function for %s", imageName)
-	functionTimeout := int32(90)
+	functionTimeout := int32(900)
 	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
+	imageURIWithTag := fmt.Sprintf("%s:%s", *imageURI, imageTag)
 
 	_, err := d.FaasAPI.CreateFunction(ctx, &lambda.CreateFunctionInput{
 		Code: &types.FunctionCode{
-			ImageUri: imageURI,
+			ImageUri: &imageURIWithTag,
 		},
 		FunctionName: &imageName,
 		Role:         &ribbleRoleArn,
@@ -211,6 +213,7 @@ func (d *Driver) CreateLambdaFunction(ctx context.Context, imageName, imageTag s
 		PackageType: types.PackageTypeImage,
 		Publish:     true,
 		Timeout:     &functionTimeout,
+		MemorySize:  aws.Int32(1536),
 	})
 
 	return err

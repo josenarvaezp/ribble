@@ -66,7 +66,7 @@ const (
 	L_COMMENT
 )
 
-func TestQuery1(filename string) aggregators.MapAggregator {
+func Query1(filename string) aggregators.MapAggregator {
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Fatal(err)
