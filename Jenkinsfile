@@ -7,13 +7,8 @@ pipeline {
                 sh 'echo "Hello World"'
 
                 // start localstack
-                sh 'docker-compose up -d'
-
-                // check localstack health check
-                timeout(time: 3, unit: 'MINUTES') {
-                    retry(3) {
-                        sh './build/integration-tests/localstack-health.sh'
-                    }
+                timeout(time: 1, unit: 'MINUTES') {
+                    sh './build/integration-tests/localstack.sh'
                 }
 
                 // create integration test bucket
