@@ -81,5 +81,5 @@ install-aws:
 
 integration-s3:
 	awslocal s3 mb s3://integration-test-bucket
-	awslocal s3 cp ./build/integration_tests/test_data/testest_lineitem.tbl.1  s3://integration-test-bucket/test_lineitem.tbl.1
+	awslocal s3 cp ./build/integration_tests/test_data/test_lineitem.tbl.1  s3://integration-test-bucket/test_lineitem.tbl.1
 	awslocal s3 cp ./build/integration_tests/test_data/test_lineitem.tbl.2  s3://integration-test-bucket/test_lineitem.tbl.2
