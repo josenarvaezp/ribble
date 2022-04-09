@@ -30,7 +30,7 @@ pipeline {
             agent any
             // cleanup 
             sh 'docker-compose down'
-            sh 'rm -rf ./build/lambda_gen/88cc574a-83b1-40fa-92fc-3b4d4fd24624/'
+            // sh 'rm -rf ./build/lambda_gen/88cc574a-83b1-40fa-92fc-3b4d4fd24624/'
         }
     }
 }

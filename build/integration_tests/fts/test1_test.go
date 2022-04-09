@@ -15,6 +15,12 @@ import (
 )
 
 func TestBuildQ1(t *testing.T) {
+	// currently ribble needs to be run at the root of the directory
+	os.Chdir("../../../")
+
+	dir, _ := os.Getwd()
+	fmt.Println(dir)
+
 	jobPath := "./build/integration_tests/tests/query1/job/query1_job.go"
 
 	// set driver
@@ -49,6 +55,9 @@ func TestBuildQ1(t *testing.T) {
 }
 
 func TestUploadQ1(t *testing.T) {
+	// currently ribble needs to be run at the root of the directory
+	os.Chdir("../../../")
+
 	jobID := uuid.MustParse("88cc574a-83b1-40fa-92fc-3b4d4fd24624")
 	ctx := context.Background()
 
@@ -85,6 +94,9 @@ func TestUploadQ1(t *testing.T) {
 }
 
 func TestRunQ1(t *testing.T) {
+	// currently ribble needs to be run at the root of the directory
+	os.Chdir("../../../")
+
 	jobID := uuid.MustParse("88cc574a-83b1-40fa-92fc-3b4d4fd24624")
 	ctx := context.Background()
 	reducers := 0
