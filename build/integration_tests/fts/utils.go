@@ -116,7 +116,7 @@ func assertOutputQ6(t *testing.T, expectedOutputFile string, jobID string) {
 		expectedResult, err := os.ReadFile(expectedOutputFile)
 		require.Nil(t, err)
 
-		var resultJson, expectedResultJson []map[string]interface{}
+		var resultJson, expectedResultJson map[string]interface{}
 		err = json.Unmarshal(result, &resultJson)
 		require.Nil(t, err)
 
