@@ -1,8 +1,7 @@
 pipeline {
-    agent none
+    agent any
     stages {
         stage('Start localstack') {
-            agent any
             steps {
                 // start localstack
                 timeout(time: 1, unit: 'MINUTES') {
@@ -15,7 +14,6 @@ pipeline {
         }
 
         stage('Run test 1') {
-            agent any
             steps {
                 sh 'go test -run TestBuildQ1 ./build/integration_tests/fts'
                 sh 'go test -run TestUploadQ1 ./build/integration_tests/fts'
@@ -26,7 +24,6 @@ pipeline {
         }
     }
     post {
-        agent any
         cleanup {
             // cleanup 
             cleanWs()
