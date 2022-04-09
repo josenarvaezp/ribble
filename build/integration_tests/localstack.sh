@@ -4,7 +4,7 @@ awslocal s3 ls
 
 if ! awslocal s3 ls ; then
     echo "Localstack not running..."
-    docker-compose up -d
+    docker-compose -f ./build/integration_tests/docker-compose.yml up -d
 
     # wait until is up
     while ! awslocal s3 ls
