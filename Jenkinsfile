@@ -25,9 +25,8 @@ pipeline {
     }
     post {
         cleanup {
-            // cleanup 
-            cleanWs()
             sh 'docker-compose down'
+            cleanWs()
             // sh 'rm -rf ./build/lambda_gen/88cc574a-83b1-40fa-92fc-3b4d4fd24624/'
         }
     }
