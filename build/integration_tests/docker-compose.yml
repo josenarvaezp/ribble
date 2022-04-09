@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   localstack:
-    container_name: localstack
+    container_name: localstack_integration
     image: localstack/localstack
     ports:
       - "4566:4566"
