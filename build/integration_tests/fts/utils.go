@@ -32,8 +32,9 @@ func assertOutput(t *testing.T, expectedOutputFile string, jobID string) {
 			Bucket: &jobID,
 			Prefix: aws.String("output/"),
 		})
-		if err != nil {
+		if err != nil || len(objects.Contents) == 0 {
 			// wait 5 seconds
+			fmt.Println("sleeping")
 			time.Sleep(5 * time.Second)
 			continue
 		}
