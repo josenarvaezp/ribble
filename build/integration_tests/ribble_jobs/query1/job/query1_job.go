@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/josenarvaezp/displ/build/integration_tests/tests/query1"
+	"github.com/josenarvaezp/displ/build/integration_tests/ribble_jobs/query1"
 	"github.com/josenarvaezp/displ/pkg/ribble"
 )
 
