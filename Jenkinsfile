@@ -4,7 +4,7 @@ pipeline {
         stage('Start localstack') {
             steps {
                 // echo "YES"
-                start localstack
+                // start localstack
                 timeout(time: 1, unit: 'MINUTES') {
                     sh './build/integration_tests/localstack.sh'
                 }
