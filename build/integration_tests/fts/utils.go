@@ -26,41 +26,40 @@ func assertOutput(t *testing.T, expectedOutputFile string, jobID string) {
 		o.UsePathStyle = true
 	})
 
-	var objects *s3.ListObjectsOutput
-
 	// wait for job to be completed
 	for true {
-		objects, err = s3Client.ListObjects(context.Background(), &s3.ListObjectsInput{
+		objects, err := s3Client.ListObjects(context.Background(), &s3.ListObjectsInput{
 			Bucket: &jobID,
 			Prefix: aws.String("output/"),
 		})
-		if err == nil {
-			// output ready
-			break
+		if err != nil {
+			// wait 5 seconds
+			time.Sleep(5 * time.Second)
+			continue
 		}
 
-		// wait 5 seconds
-		time.Sleep(5 * time.Second)
+		// output ready
+		require.Len(t, objects.Contents, 1)
+
+		res, err := s3Client.GetObject(context.Background(), &s3.GetObjectInput{
+			Bucket: aws.String(jobID),
+			Key:    objects.Contents[0].Key,
+		})
+		require.Nil(t, err)
+
+		defer res.Body.Close()
+
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(res.Body)
+		result := buf.String()
+
+		dat, err := os.ReadFile(expectedOutputFile)
+		require.Nil(t, err)
+
+		expectedResult := string(dat)
+
+		require.JSONEq(t, expectedResult, result)
+
+		return
 	}
-
-	require.Len(t, objects.Contents, 1)
-
-	res, err := s3Client.GetObject(context.Background(), &s3.GetObjectInput{
-		Bucket: aws.String(jobID),
-		Key:    objects.Contents[0].Key,
-	})
-	require.Nil(t, err)
-
-	defer res.Body.Close()
-
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(res.Body)
-	result := buf.String()
-
-	dat, err := os.ReadFile(expectedOutputFile)
-	require.Nil(t, err)
-
-	expectedResult := string(dat)
-
-	require.JSONEq(t, expectedResult, result)
 }
