@@ -3,14 +3,17 @@ package fts
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/josenarvaezp/displ/internal/config"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -52,14 +55,20 @@ func assertOutput(t *testing.T, expectedOutputFile string, jobID string) {
 
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(res.Body)
-		result := buf.String()
+		result := buf.Bytes()
 
-		dat, err := os.ReadFile(expectedOutputFile)
+		expectedResult, err := os.ReadFile(expectedOutputFile)
 		require.Nil(t, err)
 
-		expectedResult := string(dat)
+		var resultJson, expectedResultJson []map[string]interface{}
+		err = json.Unmarshal(result, &resultJson)
+		require.Nil(t, err)
 
-		require.JSONEq(t, expectedResult, result)
+		err = json.Unmarshal(expectedResult, &expectedResultJson)
+		require.Nil(t, err)
+
+		jsonEqual := reflect.DeepEqual(expectedResultJson, resultJson)
+		assert.True(t, jsonEqual)
 
 		return
 	}
