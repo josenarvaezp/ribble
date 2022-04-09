@@ -15,15 +15,22 @@ pipeline {
                 sh 'make integration-s3'
             }
         }
-        // stage('Test') {
-        //     agent {
-        //         docker { image 'integration:latest' }
-        //     }
-        //     steps {
-        //         sh 'echo "HERE"'
-        //         sh 'make test'
-        //     }
-        // }
+
+        stage('Build ribble') {
+            agent any
+            steps {
+                sh 'make build_cli'
+            }
+        }
+
+        stage('Run test 1') {
+            agent any
+            steps {
+                sh './build/integration_tests/test1.sh'
+            }
+        }
+
+
     }
 }
 
