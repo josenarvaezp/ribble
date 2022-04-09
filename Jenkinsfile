@@ -17,19 +17,19 @@ pipeline {
             steps {
                 sh 'go test -run TestBuildQ1 ./build/integration_tests/fts'
                 sh 'go test -run TestUploadQ1 ./build/integration_tests/fts'
-                timeout(time: 3, unit: 'MINUTES') {
-                    sh 'go test -run TestRunQ1 ./build/integration_tests/fts'
-                }
+                // timeout(time: 3, unit: 'MINUTES') {
+                //     sh 'go test -run TestRunQ1 ./build/integration_tests/fts'
+                // }
             }
         }
     }
-    post {
-        cleanup {
-            sh 'docker-compose down'
-            cleanWs()
-            // sh 'rm -rf ./build/lambda_gen/88cc574a-83b1-40fa-92fc-3b4d4fd24624/'
-        }
-    }
+    // post {
+    //     cleanup {
+    //         sh 'docker-compose down'
+    //         cleanWs()
+    //         sh 'rm -rf ./build/lambda_gen/88cc574a-83b1-40fa-92fc-3b4d4fd24624/'
+    //     }
+    // }
 }
 
 // pipeline {
