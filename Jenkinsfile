@@ -25,8 +25,8 @@ pipeline {
             }
         }
     }
-    agent any
-    post { 
+    post {
+        agent any
         cleanup {
             // cleanup 
             cleanWs()
