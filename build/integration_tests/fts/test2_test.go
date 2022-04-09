@@ -144,5 +144,5 @@ func TestRunQ6(t *testing.T) {
 	require.Nil(t, err)
 
 	// wait until job has completed
-	assertOutput(t, "./build/integration_tests/test_output/test6_out", jobID.String())
+	assertOutputQ6(t, "./build/integration_tests/test_output/test6_out", jobID.String())
 }
