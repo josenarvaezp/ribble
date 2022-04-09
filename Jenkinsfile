@@ -25,15 +25,15 @@ pipeline {
             }
         }
     }
-    // post { 
-    //     always {
-    //         agent any
-    //         // cleanup 
-    //         cleanWs()
-    //         sh 'docker-compose down'
-    //         // sh 'rm -rf ./build/lambda_gen/88cc574a-83b1-40fa-92fc-3b4d4fd24624/'
-    //     }
-    // }
+    agent any
+    post { 
+        cleanup {
+            // cleanup 
+            cleanWs()
+            sh 'docker-compose down'
+            // sh 'rm -rf ./build/lambda_gen/88cc574a-83b1-40fa-92fc-3b4d4fd24624/'
+        }
+    }
 }
 
 // pipeline {
