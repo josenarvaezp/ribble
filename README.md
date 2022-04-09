@@ -27,16 +27,6 @@ ribble set-credentials \
 
 Use --local to create the credentials in localstack.
 
-## Setup
-
-The `setup` command is used to set common resources that will be used by all ribble jobs. Specifically, this command uploads the aggregator images to ECR and creates Lambda functions for each of them. Note that you only need to use this command once when setting up the framework.
-```
-ribble setup \
-    --account-id <your-account-id> \
-    --region <aws-region> \
-    --username <aws-username>
-```
-
 ## Build
 
 The `build` command is used to create the resources locally that are needed to run the job. Specifically it auto-generates AWS lambda complacent `.go` files for the job coordinator and the mapper function. It also auto-generates `Dockerfiles` for each of them and builds the images.
@@ -71,10 +61,19 @@ The `run` command is used to run the job with the given job id. Note that this c
 ribble upload --job-id <id-of-job>
 ```
 
-# Using Localstack
+# Local testing
 
-## Create a bucket
+For local testing you can use Localstack, a docker service that replicates AWS locally. You can either use the AWS CLI by using the `--endpoint-url` flag like: `aws --endpoint-url=http://localhost:4566 s3 ls` or you can download [awslocal](https://github.com/localstack/awscli-local).
+
+To start localstack run:
+```
+docker-compose up -d
+```
+
+Once localstack is running, create a bucket and upload files:
+```
 awslocal s3 mb s3://my-input-bucket
-
-## Upload files to bucket
 awslocal s3 cp test.txt  s3://my-input-bucket/test.txt
+```
+
+When setting up the job, remember to set `Local` to true in the configuration. You can then use the ribble CLI as described in the first section. While you can test the `set-credentials` command by setting the `--local` flag to true, note that localstack does not check IAM roles or users so you can skip that.

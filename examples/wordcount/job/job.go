@@ -15,13 +15,13 @@ func main() {
 		AccountID:           "000000000000",
 		Username:            "jose",
 		LogicalSplit:        true,
-		RandomizedPartition: false,
+		RandomizedPartition: true,
 	}
 
 	// define job
 	ribble.Job(
 		wordcount.WordCount,
-		wordcount.Having,
+		nil,
 		wordcount.Sort,
 		config,
 	)

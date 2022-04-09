@@ -8,19 +8,19 @@ import (
 func main() {
 	// define job's config
 	config := ribble.Config{
-		InputBuckets:        []string{"integration-test-bucket"},
+		InputBuckets:        []string{"ribble-evaluation-100"},
 		Region:              "eu-west-2",
 		Local:               true,
 		LogLevel:            1,
 		AccountID:           "000000000000",
-		Username:            "jose",
+		Username:            "ribble",
 		LogicalSplit:        true,
-		RandomizedPartition: true,
+		RandomizedPartition: false,
 	}
 
 	// define job
 	ribble.Job(
-		query1.TestQuery1,
+		query1.Query1,
 		nil,
 		query1.Sort,
 		config,
