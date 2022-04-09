@@ -173,12 +173,17 @@ func (p AggregatorPairList) Less(i, j int) bool {
 	keyArrI := strings.Split(p[i].Key, "-")
 	returnFlagI := keyArrI[0]
 	lineStatusI := keyArrI[1]
+	keyI := keyArrI[2]
 
 	keyArrJ := strings.Split(p[j].Key, "-")
 	returnFlagJ := keyArrJ[0]
 	lineStatusJ := keyArrJ[1]
+	keyJ := keyArrJ[2]
 
 	if returnFlagI == returnFlagJ {
+		if lineStatusI == lineStatusJ {
+			return keyI < keyJ
+		}
 		return lineStatusI < lineStatusJ
 	}
 
