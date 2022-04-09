@@ -17,7 +17,6 @@ pipeline {
         stage('Run test 1') {
             agent any
             steps {
-                cleanWs()
                 sh 'go test -run TestBuildQ1 ./build/integration_tests/fts'
                 sh 'go test -run TestUploadQ1 ./build/integration_tests/fts'
                 timeout(time: 3, unit: 'MINUTES') {
@@ -30,6 +29,7 @@ pipeline {
         always {
             agent any
             // cleanup 
+            cleanWs()
             sh 'docker-compose down'
             // sh 'rm -rf ./build/lambda_gen/88cc574a-83b1-40fa-92fc-3b4d4fd24624/'
         }
