@@ -13,22 +13,22 @@ pipeline {
             }
         }
 
-        // stage('Run test 1') {
-        //     steps {
-        //         sh 'go test -run TestBuildQ1 ./build/integration_tests/fts'
-        //         sh 'go test -run TestUploadQ1 ./build/integration_tests/fts'
-        //         timeout(time: 3, unit: 'MINUTES') {
-        //             sh 'go test -run TestRunQ1 ./build/integration_tests/fts'
-        //         }
-        //     }
-        // }
+        stage('Run test 1') {
+            steps {
+                sh 'go test -run TestBuildQ1 ./build/integration_tests/tests'
+                sh 'go test -run TestUploadQ1 ./build/integration_tests/tests'
+                timeout(time: 3, unit: 'MINUTES') {
+                    sh 'go test -run TestRunQ1 ./build/integration_tests/tests'
+                }
+            }
+        }
 
         stage('Run test 2') {
             steps {
-                sh 'go test -run TestBuildQ6 ./build/integration_tests/fts'
-                sh 'go test -run TestUploadQ6 ./build/integration_tests/fts'
+                sh 'go test -run TestBuildQ6 ./build/integration_tests/tests'
+                sh 'go test -run TestUploadQ6 ./build/integration_tests/tests'
                 timeout(time: 3, unit: 'MINUTES') {
-                    sh 'go test -run TestRunQ6 ./build/integration_tests/fts'
+                    sh 'go test -run TestRunQ6 ./build/integration_tests/tests'
                 }
             }
         }

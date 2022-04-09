@@ -14,17 +14,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildQ6(t *testing.T) {
+func TestBuildQ1(t *testing.T) {
 	// currently ribble needs to be run at the root of the directory
 	os.Chdir("../../../")
 
 	dir, _ := os.Getwd()
 	fmt.Println(dir)
 
-	jobPath := "./build/integration_tests/tests/query6/job/query6_job.go"
+	jobPath := "./build/integration_tests/ribble_jobs/query1/job/query1_job.go"
 
 	// set driver
-	jobID := uuid.MustParse("2f18f4e1-60e7-491f-97b7-989c996f577e")
+	jobID := uuid.MustParse("88cc574a-83b1-40fa-92fc-3b4d4fd24624")
 	jobDriver := driver.NewBuildDriver(jobID)
 
 	// add job path info to driver
@@ -54,11 +54,11 @@ func TestBuildQ6(t *testing.T) {
 	require.Nil(t, err)
 }
 
-func TestUploadQ6(t *testing.T) {
+func TestUploadQ1(t *testing.T) {
 	// currently ribble needs to be run at the root of the directory
 	os.Chdir("../../../")
 
-	jobID := uuid.MustParse("2f18f4e1-60e7-491f-97b7-989c996f577e")
+	jobID := uuid.MustParse("88cc574a-83b1-40fa-92fc-3b4d4fd24624")
 	ctx := context.Background()
 
 	// get driver config values
@@ -93,11 +93,11 @@ func TestUploadQ6(t *testing.T) {
 	require.Nil(t, err)
 }
 
-func TestRunQ6(t *testing.T) {
+func TestRunQ1(t *testing.T) {
 	// currently ribble needs to be run at the root of the directory
 	os.Chdir("../../../")
 
-	jobID := uuid.MustParse("2f18f4e1-60e7-491f-97b7-989c996f577e")
+	jobID := uuid.MustParse("88cc574a-83b1-40fa-92fc-3b4d4fd24624")
 	ctx := context.Background()
 	reducers := 0
 
@@ -144,5 +144,5 @@ func TestRunQ6(t *testing.T) {
 	require.Nil(t, err)
 
 	// wait until job has completed
-	assertOutputQ6(t, "./build/integration_tests/test_output/test6_out", jobID.String())
+	assertOutputQ1(t, "./build/integration_tests/tests_expected_output/test1_out", jobID.String())
 }
