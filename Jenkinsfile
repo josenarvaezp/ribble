@@ -19,11 +19,18 @@ pipeline {
             steps {
                 sh 'go test -run TestBuildQ1 ./build/integration_tests/fts'
                 sh 'go test -run TestUploadQ1 ./build/integration_tests/fts'
-                sh 'go test -run TestRunQ1 ./build/integration_tests/fts'
+                timeout(time: 3, unit: 'MINUTES') {
+                    sh 'go test -run TestRunQ1 ./build/integration_tests/fts'
+                }
             }
         }
 
-
+        stage('Cleanup') {
+            agent any
+            steps {
+                sh 'docker-compose down'
+            }
+        }
     }
 }
 

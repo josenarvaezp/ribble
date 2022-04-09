@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/josenarvaezp/displ/internal/config"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,25 +29,18 @@ func assertOutput(t *testing.T, expectedOutputFile string, jobID string) {
 	var objects *s3.ListObjectsOutput
 
 	// wait for job to be completed
-	startTime := time.Now()
 	for true {
 		objects, err = s3Client.ListObjects(context.Background(), &s3.ListObjectsInput{
 			Bucket: &jobID,
 			Prefix: aws.String("output/"),
 		})
-		if err != nil {
+		if err == nil {
 			// output ready
 			break
 		}
 
 		// wait 5 seconds
 		time.Sleep(5 * time.Second)
-
-		currentTime := time.Now()
-
-		if currentTime.Sub(startTime) > 3*time.Minute {
-			assert.Fail(t, "Job not completed in 3 minutes")
-		}
 	}
 
 	require.Len(t, objects.Contents, 1)
