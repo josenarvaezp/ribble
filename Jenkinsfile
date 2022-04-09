@@ -24,12 +24,11 @@ pipeline {
                 }
             }
         }
-
-        stage('Cleanup') {
-            agent any
-            steps {
-                sh 'docker-compose down'
-            }
+    }
+    post { 
+        always {
+            // cleanup 
+            sh 'docker-compose down'
         }
     }
 }
