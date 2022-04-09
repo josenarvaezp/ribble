@@ -1,17 +1,18 @@
 pipeline {
     agent any
     stages {
-        // stage('Start localstack') {
-        //     steps {
-        //         // start localstack
-        //         timeout(time: 1, unit: 'MINUTES') {
-        //             sh './build/integration_tests/localstack.sh'
-        //         }
+        stage('Start localstack') {
+            steps {
+                echo "HELL)"
+                // // start localstack
+                // timeout(time: 1, unit: 'MINUTES') {
+                //     sh './build/integration_tests/localstack.sh'
+                // }
 
-        //         // create integration test bucket
-        //         sh 'make integration-s3'
-        //     }
-        // }
+                // // create integration test bucket
+                // sh 'make integration-s3'
+            }
+        }
 
         // stage('Run test 1') {
         //     steps {
