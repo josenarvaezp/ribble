@@ -1,5 +1,9 @@
 pipeline {
     agent any
+    environment {
+        GOPRIVATE = 'github.com/josenarvaezp/displ'
+    }
+
     stages {
         stage('Start localstack') {
             steps {
