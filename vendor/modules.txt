@@ -1,8 +1,5 @@
 # github.com/aws/aws-lambda-go v1.27.1
 ## explicit
-github.com/aws/aws-lambda-go/lambda
-github.com/aws/aws-lambda-go/lambda/handlertrace
-github.com/aws/aws-lambda-go/lambda/messages
 github.com/aws/aws-lambda-go/lambdacontext
 # github.com/aws/aws-sdk-go-v2 v1.16.2
 ## explicit
@@ -143,9 +140,12 @@ github.com/sirupsen/logrus
 github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.5
 github.com/spf13/pflag
+# github.com/stretchr/objx v0.1.1
+github.com/stretchr/objx
 # github.com/stretchr/testify v1.7.1
 ## explicit
 github.com/stretchr/testify/assert
+github.com/stretchr/testify/mock
 github.com/stretchr/testify/require
 # golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e
 ## explicit
