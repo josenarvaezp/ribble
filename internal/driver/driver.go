@@ -54,6 +54,7 @@ type Driver struct {
 	// clients
 	ObjectStoreAPI objectstore.ObjectStoreAPI
 	DownloaderAPI  objectstore.ManagerDownloaderAPI
+	UploaderAPI    objectstore.ManagerUploaderAPI
 	FaasAPI        faas.FaasAPI
 	QueuesAPI      queues.QueuesAPI
 	ImageRepoAPI   repo.ImageRepoAPI
@@ -158,6 +159,7 @@ func NewDriver(jobID uuid.UUID, conf *config.Config) (*Driver, error) {
 	})
 	driver.ObjectStoreAPI = s3Client
 	driver.DownloaderAPI = manager.NewDownloader(s3Client)
+	driver.UploaderAPI = manager.NewUploader(s3Client)
 	driver.FaasAPI = lambda.NewFromConfig(*cfg)
 	driver.QueuesAPI = sqs.NewFromConfig(*cfg)
 	driver.ImageRepoAPI = ecr.NewFromConfig(*cfg)

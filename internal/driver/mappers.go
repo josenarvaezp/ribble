@@ -2,14 +2,11 @@ package driver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
-	"github.com/aws/aws-sdk-go-v2/service/lambda"
-	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/josenarvaezp/displ/internal/objectstore"
@@ -238,51 +235,4 @@ func (d *Driver) generateMappingsForPartialObjects(objects []objectstore.Object,
 	}
 
 	return partialMappings, nil
-}
-
-// StartMappers sends the each split into lambda
-func (d *Driver) StartMappers(ctx context.Context, mappings []*lambdas.Mapping, numQueues int) error {
-	// function arn
-	functionArn := fmt.Sprintf(
-		"arn:aws:lambda:%s:%s:function:%s",
-		d.Config.Region,
-		d.Config.AccountID,
-		d.BuildData.MapperData.ImageName,
-	)
-
-	for _, currentMapping := range mappings {
-		// create payload describing split
-		input := &lambdas.MapperInput{
-			JobID:     d.JobID,
-			Mapping:   *currentMapping,
-			NumQueues: int64(numQueues),
-		}
-
-		requestPayload, err := json.Marshal(input)
-		if err != nil {
-			return err
-		}
-
-		// send the mapping split into lamda
-		_, err = d.FaasAPI.Invoke(
-			ctx,
-			&lambda.InvokeInput{
-				FunctionName:   aws.String(functionArn),
-				Payload:        requestPayload,
-				InvocationType: types.InvocationTypeEvent,
-			},
-		)
-		if err != nil {
-			return err
-		}
-
-		// error is ignored from asynch invokation and result only holds the status code
-		// check status code
-		// if result.StatusCode != SUCCESS_CODE {
-		// 	// TODO: stop execution and inform the user about the errors
-		// 	return errors.New("Error starting mappers")
-		// }
-	}
-
-	return nil
 }

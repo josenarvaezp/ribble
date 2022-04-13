@@ -12,7 +12,7 @@ services:
       - DATA_DIR=${DATA_DIR- }
       - PORT_WEB_UI=${PORT_WEB_UI- }
       - LAMBDA_EXECUTOR=${LAMBDA_EXECUTOR- }
-      - LAMBDA_DOCKER_NETWORK=integration_tests_ribble_main_localstack_default
+      - LAMBDA_DOCKER_NETWORK=integration_tests_ribble_mapperd-from-coord_localstack_default
       - KINESIS_ERROR_PROBABILITY=${KINESIS_ERROR_PROBABILITY- }
       - DOCKER_HOST=unix:///var/run/docker.sock
       - HOST_TMP_FOLDER=${TMPDIR}
@@ -23,8 +23,8 @@ services:
       - "${TMPDIR:-/tmp/localstack}:/tmp/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
-      - ribble_main_localstack_default
+      - ribble_mapperd-from-coord_localstack_default
 
 networks:
-  ribble_main_localstack_default:
+  ribble_mapperd-from-coord_localstack_default:
     driver: bridge

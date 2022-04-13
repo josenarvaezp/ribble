@@ -274,9 +274,11 @@ var runCmd = &cobra.Command{
 			reducers = int(math.Ceil(float64(numMappings) / 2))
 		}
 
-		totalObjects := 0
-		for _, mapping := range mappings {
-			totalObjects = totalObjects + len(mapping.Objects)
+		// write mappings to s3
+		err = jobDriver.WriteMappings(ctx, mappings)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error writing mappings to S3")
+			return
 		}
 
 		// create streams for job
@@ -290,13 +292,6 @@ var runCmd = &cobra.Command{
 		err = jobDriver.StartCoordinator(ctx, numMappings, reducers)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error starting the coordinator")
-			return
-		}
-
-		// start mappers
-		err = jobDriver.StartMappers(ctx, mappings, reducers)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error starting the mappers")
 			return
 		}
 
