@@ -54,14 +54,14 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 	)
 
 	// start mappers
-	err = c.StartMappers(ctx, request.NumQueues, request.FunctionName)
+	err := c.StartMappers(ctx, request.NumQueues, request.FunctionName)
 	if err != nil {
-		driverLogger.WithError(err).Error("Error starting the mappers")
-		return
+		coordinatorLogger.WithError(err).Error("Error starting the mappers")
+		return err
 	}
 
 	// waits until mappers are done
-	nextLogToken, err := c.AreMappersDone(ctx, nextLogToken)
+	nextLogToken, err = c.AreMappersDone(ctx, nextLogToken)
 	if err != nil {
 		coordinatorLogger.WithError(err).Error("Error reading mappers done queue")
 		return err
@@ -174,8 +174,15 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 		nil, // empty token as it is the first log
 	)
 
+	// start mappers
+	err := c.StartMappers(ctx, request.NumQueues, request.FunctionName)
+	if err != nil {
+		coordinatorLogger.WithError(err).Error("Error starting the mappers")
+		return err
+	}
+
 	// waits until mappers are done
-	nextLogToken, err := c.AreMappersDone(ctx, nextLogToken)
+	nextLogToken, err = c.AreMappersDone(ctx, nextLogToken)
 	if err != nil {
 		coordinatorLogger.WithError(err).Error("Error reading mappers done queue")
 		return err
