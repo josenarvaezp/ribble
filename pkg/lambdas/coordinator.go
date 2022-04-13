@@ -35,9 +35,10 @@ const (
 
 // CoordinatorInput is the input the coordinator lambda receives
 type CoordinatorInput struct {
-	JobID      uuid.UUID `json:"jobID"`
-	NumMappers int       `json:"numMappers"`
-	NumQueues  int       `json:"numQueues"`
+	JobID        uuid.UUID `json:"jobID"`
+	NumMappers   int       `json:"numMappers"`
+	NumQueues    int       `json:"numQueues"`
+	FunctionName string    `json:"functionName"`
 }
 
 // CoordinatorAPI is an interface deining the functions available to the coordinator
@@ -52,6 +53,7 @@ type Coordinator struct {
 	// clients
 	QueuesAPI      queues.QueuesAPI
 	FaasAPI        faas.FaasAPI
+	DownloaderAPI  objectstore.ManagerDownloaderAPI
 	UploaderAPI    objectstore.ManagerUploaderAPI
 	LogsAPI        logs.LogsAPI
 	ObjectStoreAPI objectstore.ObjectStoreAPI
@@ -106,6 +108,7 @@ func NewCoordinator(
 	s3Client := s3.NewFromConfig(*cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
+	coordinator.DownloaderAPI = manager.NewDownloader(s3Client)
 	coordinator.UploaderAPI = manager.NewUploader(s3Client)
 	coordinator.ObjectStoreAPI = s3Client
 
@@ -477,4 +480,73 @@ func (c *Coordinator) LogEvent(ctx context.Context, message string, nextSequence
 	}
 
 	return logRes.NextSequenceToken, nil
+}
+
+// StartMappers sends the each split into lambda
+func (c *Coordinator) StartMappers(ctx context.Context, numQueues int, functionName string) error {
+	mappings, err := c.GetMappings(ctx)
+	if err != nil {
+		return err
+	}
+
+	// function arn
+	functionArn := fmt.Sprintf(
+		"arn:aws:lambda:%s:%s:function:%s",
+		c.Region,
+		c.AccountID,
+		functionName,
+	)
+
+	for _, currentMapping := range mappings {
+		// create payload describing split
+		input := &MapperInput{
+			JobID:     c.JobID,
+			Mapping:   *currentMapping,
+			NumQueues: int64(numQueues),
+		}
+
+		requestPayload, err := json.Marshal(input)
+		if err != nil {
+			return err
+		}
+
+		// send the mapping split into lamda
+		_, err = c.FaasAPI.Invoke(
+			ctx,
+			&lambda.InvokeInput{
+				FunctionName:   aws.String(functionArn),
+				Payload:        requestPayload,
+				InvocationType: types.InvocationTypeEvent,
+			},
+		)
+		if err != nil {
+			return err
+		}
+
+		// error is ignored from asynch invokation and result only holds the status code
+		// check status code
+	}
+
+	return nil
+}
+
+func (c *Coordinator) GetMappings(ctx context.Context) ([]*Mapping, error) {
+
+	buf := manager.NewWriteAtBuffer([]byte{})
+	_, err := c.DownloaderAPI.Download(ctx, buf, &s3.GetObjectInput{
+		Bucket: aws.String(c.JobID.String()),
+		Key:    aws.String("mappings"),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// unmarshal result
+	var mappings []*Mapping
+	err = json.Unmarshal(buf.Bytes(), &mappings)
+	if err != nil {
+		return nil, err
+	}
+
+	return mappings, nil
 }

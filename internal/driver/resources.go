@@ -177,9 +177,10 @@ func (d *Driver) CreateQueues(ctx context.Context, numQueues int) error {
 func (d *Driver) StartCoordinator(ctx context.Context, numMappers int, numQueues int) error {
 	// coordinator input
 	request := &lambdas.CoordinatorInput{
-		JobID:      d.JobID,
-		NumMappers: numMappers,
-		NumQueues:  numQueues,
+		JobID:        d.JobID,
+		NumMappers:   numMappers,
+		NumQueues:    numQueues,
+		FunctionName: d.BuildData.MapperData.ImageName,
 	}
 
 	// create payload

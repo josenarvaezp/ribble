@@ -1,7 +1,9 @@
 package driver
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -12,6 +14,8 @@ import (
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 )
 
 const (
@@ -237,6 +241,32 @@ func (d *Driver) CreateLogsInfra(ctx context.Context) error {
 		LogGroupName:  &logGroupName,
 		LogStreamName: &logStreamName,
 	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// WriteMappings writes the mappings to s3 so that the coordinator can read them
+func (d *Driver) WriteMappings(ctx context.Context, mappings []*lambdas.Mapping) error {
+	// encode map to JSON
+	p, err := json.Marshal(mappings)
+	if err != nil {
+		return err
+	}
+
+	// use uploader manager to write file to S3
+	jsonContentType := "application/json"
+	bucket := d.JobID.String()
+	input := &s3.PutObjectInput{
+		Bucket:        &bucket,
+		Key:           aws.String("mappings"),
+		Body:          bytes.NewReader(p),
+		ContentType:   &jsonContentType,
+		ContentLength: int64(len(p)),
+	}
+	_, err = d.UploaderAPI.Upload(ctx, input)
 	if err != nil {
 		return err
 	}

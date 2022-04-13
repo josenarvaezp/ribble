@@ -53,6 +53,13 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 		nil, // empty token as it is the first log
 	)
 
+	// start mappers
+	err = c.StartMappers(ctx, request.NumQueues, request.FunctionName)
+	if err != nil {
+		driverLogger.WithError(err).Error("Error starting the mappers")
+		return
+	}
+
 	// waits until mappers are done
 	nextLogToken, err := c.AreMappersDone(ctx, nextLogToken)
 	if err != nil {

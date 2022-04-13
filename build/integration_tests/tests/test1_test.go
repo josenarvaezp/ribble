@@ -139,10 +139,6 @@ func TestRunQ1(t *testing.T) {
 	err = jobDriver.StartCoordinator(ctx, numMappings, reducers)
 	require.Nil(t, err)
 
-	// start mappers
-	err = jobDriver.StartMappers(ctx, mappings, reducers)
-	require.Nil(t, err)
-
 	// wait until job has completed
 	assertOutputQ1(t, "./build/integration_tests/tests_expected_output/test1_out", jobID.String())
 }
