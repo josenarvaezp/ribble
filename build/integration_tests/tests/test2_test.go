@@ -126,10 +126,9 @@ func TestRunQ6(t *testing.T) {
 		reducers = int(math.Ceil(float64(numMappings) / 2))
 	}
 
-	totalObjects := 0
-	for _, mapping := range mappings {
-		totalObjects = totalObjects + len(mapping.Objects)
-	}
+	// write mappings to s3
+	err = jobDriver.WriteMappings(ctx, mappings)
+	require.Nil(t, err)
 
 	// create streams for job
 	err = jobDriver.CreateQueues(ctx, reducers)
