@@ -170,8 +170,8 @@ func (c *Coordinator) AreMappersDone(ctx context.Context, nextLogToken *string) 
 			break
 		}
 
-		// sleep for 5 seconds before trying to get more results
-		time.Sleep(5 * time.Second)
+		// sleep for 1 seconds before trying to get more results
+		time.Sleep(1 * time.Second)
 	}
 
 	messagesReceived := 0
@@ -339,7 +339,7 @@ func (c *Coordinator) AreReducersDone(ctx context.Context, nextLogToken *string)
 		}
 
 		// sleep for 5 seconds before trying to get more results
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 
 	messagesReceived := 0
