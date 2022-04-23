@@ -211,6 +211,13 @@ func (c *Coordinator) AreMappersDone(ctx context.Context, nextLogToken *string) 
 // InvokeReducers is used to invoke the reducers once all mappers are done
 // there is one reducer per queue invoked
 func (c *Coordinator) InvokeReducers(ctx context.Context, reducerName string) error {
+	// check if reducers have been invoked
+	if c.GetDoneObject(ctx, "reducers-invoked") {
+		// reducers have already been invoked
+		// it is likely that the coordinator crashed
+		return nil
+	}
+
 	// function arn
 	functionArn := fmt.Sprintf(
 		"arn:aws:lambda:%s:%s:function:%s_%s",
@@ -254,11 +261,18 @@ func (c *Coordinator) InvokeReducers(ctx context.Context, reducerName string) er
 		}
 	}
 
-	return nil
+	return c.WriteDoneObject(ctx, "reducers-invoked")
 }
 
 // InvokeReducer is used to invoke the final reducer
 func (c *Coordinator) InvokeReducer(ctx context.Context, reducerName string) error {
+	// check if reducers have been invoked
+	if c.GetDoneObject(ctx, "final-reducer-invoked") {
+		// reducers have already been invoked
+		// it is likely that the coordinator crashed
+		return nil
+	}
+
 	// function arn
 	functionArn := fmt.Sprintf(
 		"arn:aws:lambda:%s:%s:function:%s_%s",
@@ -299,7 +313,7 @@ func (c *Coordinator) InvokeReducer(ctx context.Context, reducerName string) err
 		return errors.New("Error starting mappers")
 	}
 
-	return nil
+	return c.WriteDoneObject(ctx, "final-reducer-invoked")
 }
 
 // AreReducersDone reads events from the reducers-done queue to check
@@ -376,14 +390,14 @@ func (c *Coordinator) AreReducersDone(ctx context.Context, nextLogToken *string)
 	return nextLogToken, nil
 }
 
-// WriteDoneObject writes a blank object to indicate that the job has finished
-func (c *Coordinator) WriteDoneObject(ctx context.Context) error {
+// WriteDoneObject writes a blank object to indicate that the job has invoked
+// the mappers, the reducers or indicate the job has finished
+func (c *Coordinator) WriteDoneObject(ctx context.Context, filename string) error {
 	bucket := c.JobID.String()
-	key := fmt.Sprintf("done-job")
 
 	input := &s3.PutObjectInput{
 		Bucket: &bucket,
-		Key:    &key,
+		Key:    aws.String(filename),
 		Body:   bytes.NewReader([]byte{}),
 	}
 
@@ -394,6 +408,42 @@ func (c *Coordinator) WriteDoneObject(ctx context.Context) error {
 
 	return nil
 }
+
+// GetDoneObject reads a blank object to verify that the job has invoked
+// the mappers, the reducers or indicate the job has finished. If the given object
+// exists it returns true and false otherwise
+func (c *Coordinator) GetDoneObject(ctx context.Context, filename string) bool {
+	bucket := c.JobID.String()
+
+	_, err := c.ObjectStoreAPI.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &bucket,
+		Key:    aws.String(filename),
+	})
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
+// // WriteDoneObject writes a blank object to indicate that the job has finished
+// func (c *Coordinator) WriteDoneObject2(ctx context.Context) error {
+// 	bucket := c.JobID.String()
+// 	key := fmt.Sprintf("done-job")
+
+// 	input := &s3.PutObjectInput{
+// 		Bucket: &bucket,
+// 		Key:    &key,
+// 		Body:   bytes.NewReader([]byte{}),
+// 	}
+
+// 	_, err := c.UploaderAPI.Upload(ctx, input)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	return nil
+// }
 
 // GetNumMessagesInQueue gets the approximate number of messages in a queue
 func (c *Coordinator) GetNumMessagesInQueue(ctx context.Context, queueURL string) (int, error) {
@@ -484,6 +534,13 @@ func (c *Coordinator) LogEvent(ctx context.Context, message string, nextSequence
 
 // StartMappers sends the each split into lambda
 func (c *Coordinator) StartMappers(ctx context.Context, numQueues int, functionName string) error {
+	// check if mappers have been invoked
+	if c.GetDoneObject(ctx, "mappers-invoked") {
+		// mappers have already been invoked
+		// it is likely that the coordinator crashed
+		return nil
+	}
+
 	mappings, err := c.GetMappings(ctx)
 	if err != nil {
 		return err
@@ -527,7 +584,8 @@ func (c *Coordinator) StartMappers(ctx context.Context, numQueues int, functionN
 		// check status code
 	}
 
-	return nil
+	// write mappers invoked object
+	return c.WriteDoneObject(ctx, "mappers-invoked")
 }
 
 func (c *Coordinator) GetMappings(ctx context.Context) ([]*Mapping, error) {
