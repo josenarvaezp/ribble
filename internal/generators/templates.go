@@ -552,6 +552,9 @@ func HandleRequest(ctx context.Context, request lambdas.MapperInput) error {
 	// keep a dictionary with the number of messages per queue
 	messageMetadata := make(map[int]int64)
 
+	// create random number generator with seed
+	randGen := m.InitRandomSeed()
+
 	for _, object := range request.Mapping.Objects {
 		// download file
 		filename, err := m.DownloadFile(object)
@@ -570,7 +573,7 @@ func HandleRequest(ctx context.Context, request lambdas.MapperInput) error {
 		mapOutput := lambdas.RunMapAggregator(*filename, {{.PackageName}}.{{.Function}})
 
 		// send output to reducers via queues
-		err = m.EmitRandom(ctx, mapOutput, messageMetadata)
+		err = m.EmitRandom(ctx, mapOutput, messageMetadata, randGen)
 		if err != nil {
 			mapperLogger.
 				WithFields(log.Fields{

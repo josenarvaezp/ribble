@@ -336,29 +336,32 @@ func (m *Mapper) getQueuePartition(key string) int {
 // GetRandomQueuePartition generates a random number
 // by using a generated uuid as the seed for the random
 // number generator
-func (m *Mapper) GetRandomQueuePartition() int {
+func (m *Mapper) GetRandomQueuePartition(randomWithSeed *rand.Rand) int {
+	return randomWithSeed.Intn(int(m.NumQueues))
+}
+
+func (m *Mapper) InitRandomSeed() *rand.Rand {
 	bi := big.NewInt(0)
 	h := md5.New()
-	h.Write([]byte(uuid.New().String()))
+	h.Write([]byte(m.MapID.String()))
 	hexstr := hex.EncodeToString(h.Sum(nil))
 	bi.SetString(hexstr, 16)
 
 	newSource := rand.NewSource(int64(bi.Uint64()))
-	randomWithSeed := rand.New(newSource)
-	return randomWithSeed.Intn(int(m.NumQueues))
+	return rand.New(newSource)
 }
 
 // EmitRandom sends the data (a single value) produced by a mapper
 // to random partition queues. This is used when the distribution of
 // keys is not good to create good load balancing.
-func (m *Mapper) EmitRandom(ctx context.Context, outputMap aggregators.MapAggregator, messageMetadata map[int]int64) error {
+func (m *Mapper) EmitRandom(ctx context.Context, outputMap aggregators.MapAggregator, messageMetadata map[int]int64, randomWithSeed *rand.Rand) error {
 	MetricsSQSTotalMessages := 0
 
 	for key, value := range outputMap {
 		messageID := uuid.New().String()
 
 		// get partition queue from key
-		partitionQueue := m.GetRandomQueuePartition()
+		partitionQueue := m.GetRandomQueuePartition(randomWithSeed)
 
 		aggregatorType := GetAggregatorType(value)
 
