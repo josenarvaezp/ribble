@@ -1071,11 +1071,6 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 	// update output map with reduced intermediate results
 	wg.Add(1)
 	go r.Output.UpdateOutput(intermediateReducedMap, &wg)
-
-	// delete all messages from queue
-	wg.Add(1)
-	go r.DeleteIntermediateMessagesFromQueue(ctx, queueURL, processedMessagesDeleteInfo, &wg)
-
 	wg.Wait()
 
 	{{if .WithFilter}}
@@ -1104,6 +1099,11 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 		return err
 	}
 	{{end}}
+
+	// delete all messages from queue
+	wg.Add(1)
+	go r.DeleteIntermediateMessagesFromQueue(ctx, queueURL, processedMessagesDeleteInfo, &wg)
+	wg.Wait()
 
 	// indicate reducer has finished
 	err = r.SendFinishedEvent(ctx)
@@ -1313,11 +1313,6 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 	// update output map with reduced intermediate results
 	wg.Add(1)
 	go r.Output.UpdateOutput(intermediateOutput, &wg)
-
-	// delete all messages from queue
-	wg.Add(1)
-	go r.DeleteIntermediateMessagesFromQueue(ctx, queueURL, processedMessagesDeleteInfo, &wg)
-
 	wg.Wait()
 
 	{{if .WithFilter}}
@@ -1346,6 +1341,11 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 		return err
 	}
 	{{end}}
+
+	// delete all messages from queue
+	wg.Add(1)
+	go r.DeleteIntermediateMessagesFromQueue(ctx, queueURL, processedMessagesDeleteInfo, &wg)
+	wg.Wait()
 
 	return nil
 }
