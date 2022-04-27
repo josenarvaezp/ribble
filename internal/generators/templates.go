@@ -961,7 +961,8 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 			// in the background while we keep processing messages
 
 			// merge the dedupe map so that the read dedupe map is up to date
-			r.Dedupe.Merge()
+			wg.Add(1)
+			go r.Dedupe.Merge()
 
 			// save intermediate dedupe
 			wg.Add(1)
