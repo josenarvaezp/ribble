@@ -48,11 +48,11 @@ func main() {
 	buildCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
 	uploadCmd.PersistentFlags().StringVar(&jobID, "job-id", "", "id of job to upload")
+	uploadCmd.PersistentFlags().IntVar(&reducers, "reducers", 0, "number of reducers to use")
 	uploadCmd.MarkPersistentFlagRequired("job-id")
 	uploadCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
 	runCmd.PersistentFlags().StringVar(&jobID, "job-id", "", "id of job to run")
-	runCmd.PersistentFlags().IntVar(&reducers, "reducers", 0, "number of reducers to use")
 	runCmd.MarkPersistentFlagRequired("job-id")
 	runCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
@@ -181,17 +181,54 @@ var uploadCmd = &cobra.Command{
 		}
 		jobDriver.BuildData = buildData
 
-		// create log group and stream
-		err = jobDriver.CreateLogsInfra(ctx)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error creating log group and stream")
-			return
-		}
-
 		// Setting up resources
 		err = jobDriver.CreateJobBucket(ctx)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating the job bucket")
+			return
+		}
+
+		// generate mappings from S3 input bucket
+		mappings, err := jobDriver.GenerateMappings(ctx)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error generating mappings from S3")
+			return
+		}
+
+		// get number of reducers
+		numMappings := len(mappings)
+		if reducers == 0 {
+			// no reducers specified
+			reducers = int(math.Ceil(float64(numMappings) / 2))
+		}
+
+		// update build data
+		buildData.NumMappers = numMappings
+		buildData.NumReducers = reducers
+		err = generators.WriteBuildData(buildData, jobID.String())
+		if err != nil {
+			driverLogger.WithError(err).Error("Error updating build data")
+			return
+		}
+
+		// write mappings to s3
+		err = jobDriver.WriteMappings(ctx, mappings)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error writing mappings to S3")
+			return
+		}
+
+		// create streams for job
+		err = jobDriver.CreateQueues(ctx, reducers)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error creating the job streams")
+			return
+		}
+
+		// create log group and stream
+		err = jobDriver.CreateLogsInfra(ctx)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error creating log group and stream")
 			return
 		}
 
@@ -261,35 +298,8 @@ var runCmd = &cobra.Command{
 		}
 		jobDriver.BuildData = buildData
 
-		// generate mappings from S3 input bucket
-		mappings, err := jobDriver.GenerateMappings(ctx)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error generating mappings from S3")
-			return
-		}
-
-		numMappings := len(mappings)
-		if reducers == 0 {
-			// no reducers specified
-			reducers = int(math.Ceil(float64(numMappings) / 2))
-		}
-
-		// write mappings to s3
-		err = jobDriver.WriteMappings(ctx, mappings)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error writing mappings to S3")
-			return
-		}
-
-		// create streams for job
-		err = jobDriver.CreateQueues(ctx, reducers)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error creating the job streams")
-			return
-		}
-
 		// start coordinator
-		err = jobDriver.StartCoordinator(ctx, numMappings, reducers)
+		err = jobDriver.StartCoordinator(ctx)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error starting the coordinator")
 			return

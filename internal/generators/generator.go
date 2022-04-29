@@ -29,6 +29,8 @@ type BuildData struct {
 	MapperData      *FunctionData          `yaml:"MapperData,omitempty"`
 	CoordinatorData *CoordinatorData       `yaml:"CoordinatorData,omitempty"`
 	ReducerData     []*ReducerFunctionData `yaml:"ReducerData,omitempty"`
+	NumMappers      int                    `yaml:"NumMappers,omitempty"`
+	NumReducers     int                    `yaml:"NumReducers,omitempty"`
 }
 
 // WriteBuildData writes the build data to a yaml file
