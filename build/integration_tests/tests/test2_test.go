@@ -18,9 +18,6 @@ func TestBuildQ6(t *testing.T) {
 	// currently ribble needs to be run at the root of the directory
 	os.Chdir("../../../")
 
-	dir, _ := os.Getwd()
-	fmt.Println(dir)
-
 	jobPath := "./build/integration_tests/ribble_jobs/query6/job/query6_job.go"
 
 	// set driver
@@ -76,12 +73,36 @@ func TestUploadQ6(t *testing.T) {
 	require.Nil(t, err)
 	jobDriver.BuildData = buildData
 
-	// create log group and stream
-	err = jobDriver.CreateLogsInfra(ctx)
-	require.Nil(t, err)
-
 	// Setting up resources
 	err = jobDriver.CreateJobBucket(ctx)
+	require.Nil(t, err)
+
+	// generate mappings from S3 input bucket
+	mappings, err := jobDriver.GenerateMappings(ctx)
+	require.Nil(t, err)
+
+	// get number of reducers
+	numMappings := len(mappings)
+
+	// no reducers specified
+	reducers := int(math.Ceil(float64(numMappings) / 2))
+
+	// update build data
+	buildData.NumMappers = numMappings
+	buildData.NumReducers = reducers
+	err = generators.WriteBuildData(buildData, jobID.String())
+	require.Nil(t, err)
+
+	// write mappings to s3
+	err = jobDriver.WriteMappings(ctx, mappings)
+	require.Nil(t, err)
+
+	// create streams for job
+	err = jobDriver.CreateQueues(ctx, reducers)
+	require.Nil(t, err)
+
+	// create log group and stream
+	err = jobDriver.CreateLogsInfra(ctx)
 	require.Nil(t, err)
 
 	// create dlq SQS for the mappers and coordinator
@@ -99,7 +120,6 @@ func TestRunQ6(t *testing.T) {
 
 	jobID := uuid.MustParse("2f18f4e1-60e7-491f-97b7-989c996f577e")
 	ctx := context.Background()
-	reducers := 0
 
 	// get driver config values
 	configFile := fmt.Sprintf("%s/%s/config.yaml", generators.GeneratedFilesDir, jobID)
@@ -116,26 +136,8 @@ func TestRunQ6(t *testing.T) {
 	require.Nil(t, err)
 	jobDriver.BuildData = buildData
 
-	// generate mappings from S3 input bucket
-	mappings, err := jobDriver.GenerateMappings(ctx)
-	require.Nil(t, err)
-
-	numMappings := len(mappings)
-	if reducers == 0 {
-		// no reducers specified
-		reducers = int(math.Ceil(float64(numMappings) / 2))
-	}
-
-	// write mappings to s3
-	err = jobDriver.WriteMappings(ctx, mappings)
-	require.Nil(t, err)
-
-	// create streams for job
-	err = jobDriver.CreateQueues(ctx, reducers)
-	require.Nil(t, err)
-
 	// start coordinator
-	err = jobDriver.StartCoordinator(ctx, numMappings, reducers)
+	err = jobDriver.StartCoordinator(ctx)
 	require.Nil(t, err)
 
 	// wait until job has completed
