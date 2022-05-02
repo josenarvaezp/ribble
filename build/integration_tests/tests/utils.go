@@ -100,7 +100,7 @@ func assertOutputQ6(t *testing.T, expectedOutputFile string, jobID string) {
 
 		res, err := s3Client.GetObject(context.Background(), &s3.GetObjectInput{
 			Bucket: aws.String(jobID),
-			Key:    objects.Contents[1].Key,
+			Key:    objects.Contents[2].Key,
 		})
 		require.Nil(t, err)
 
