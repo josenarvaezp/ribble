@@ -143,6 +143,7 @@ func (d *Driver) UploadLambdaFunctions(ctx context.Context, dqlARN *string) erro
 		d.BuildData.MapperData.ImageTag,
 		mapperURI,
 		dqlARN,
+		128,
 	)
 	if err != nil {
 		return err
@@ -165,6 +166,7 @@ func (d *Driver) UploadLambdaFunctions(ctx context.Context, dqlARN *string) erro
 		d.BuildData.CoordinatorData.ImageTag,
 		coordinatorURI,
 		dqlARN,
+		512,
 	)
 	if err != nil {
 		return err
@@ -189,6 +191,7 @@ func (d *Driver) UploadLambdaFunctions(ctx context.Context, dqlARN *string) erro
 			reducer.ImageTag,
 			currentURI,
 			dqlARN,
+			512,
 		)
 		if err != nil {
 			return err
@@ -198,7 +201,14 @@ func (d *Driver) UploadLambdaFunctions(ctx context.Context, dqlARN *string) erro
 	return nil
 }
 
-func (d *Driver) CreateLambdaFunction(ctx context.Context, imageName, imageTag string, imageURI *string, lambdaDlqArn *string) error {
+func (d *Driver) CreateLambdaFunction(
+	ctx context.Context,
+	imageName,
+	imageTag string,
+	imageURI *string,
+	lambdaDlqArn *string,
+	memory int32,
+) error {
 	functionDescription := fmt.Sprintf("Ribble function for %s", imageName)
 	functionTimeout := int32(900)
 	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
@@ -217,7 +227,7 @@ func (d *Driver) CreateLambdaFunction(ctx context.Context, imageName, imageTag s
 		PackageType: types.PackageTypeImage,
 		Publish:     true,
 		Timeout:     &functionTimeout,
-		MemorySize:  aws.Int32(1536),
+		MemorySize:  aws.Int32(memory),
 	})
 
 	return err
