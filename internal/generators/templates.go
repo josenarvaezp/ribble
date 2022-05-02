@@ -104,7 +104,7 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 	)
 
 	// indicate reducers are done
-	if err := c.WriteDoneObject(ctx); err != nil {
+	if err := c.WriteDoneObject(ctx, "done"); err != nil {
 		coordinatorLogger.WithError(err).Error("Error writing done signal")
 		return err
 	}

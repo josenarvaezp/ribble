@@ -315,7 +315,7 @@ func (ma *Min) Type() AggregatorType {
 // Reduce processes a message emmited by a mapper
 func (m *Min) Reduce(message *ReduceMessage) error {
 	if m.ToNum() > message.Value {
-		// update new max
+		// update new min
 		m.Min = message.Value
 	}
 
