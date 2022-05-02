@@ -131,6 +131,11 @@ func TestRunQ1(t *testing.T) {
 	require.Nil(t, err)
 	jobDriver.JobID = jobID
 
+	// get build data
+	buildData, err := generators.ReadBuildData(jobID.String())
+	require.Nil(t, err)
+	jobDriver.BuildData = buildData
+
 	// start coordinator
 	err = jobDriver.StartCoordinator(ctx)
 	require.Nil(t, err)
