@@ -91,7 +91,7 @@ func assertOutputQ6(t *testing.T, expectedOutputFile string, jobID string) {
 		objects, err := s3Client.ListObjects(context.Background(), &s3.ListObjectsInput{
 			Bucket: &jobID,
 		})
-		if err != nil || len(objects.Contents) == 1 {
+		if err != nil || len(objects.Contents) != 5 {
 			// wait 5 seconds
 			fmt.Println("sleeping")
 			time.Sleep(5 * time.Second)
