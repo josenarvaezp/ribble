@@ -182,6 +182,7 @@ var uploadCmd = &cobra.Command{
 		jobDriver.BuildData = buildData
 
 		// Setting up resources
+		fmt.Println("Creating job S3 bucket...")
 		err = jobDriver.CreateJobBucket(ctx)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating the job bucket")
@@ -189,6 +190,7 @@ var uploadCmd = &cobra.Command{
 		}
 
 		// generate mappings from S3 input bucket
+		fmt.Println("Generating mappings...")
 		mappings, err := jobDriver.GenerateMappings(ctx)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error generating mappings from S3")
@@ -212,6 +214,7 @@ var uploadCmd = &cobra.Command{
 		}
 
 		// write mappings to s3
+		fmt.Println("Writing mappings to S3...")
 		err = jobDriver.WriteMappings(ctx, mappings)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error writing mappings to S3")
@@ -219,6 +222,7 @@ var uploadCmd = &cobra.Command{
 		}
 
 		// create streams for job
+		fmt.Println("Creating streams in SQS...")
 		err = jobDriver.CreateQueues(ctx, reducers)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating the job streams")
@@ -226,6 +230,7 @@ var uploadCmd = &cobra.Command{
 		}
 
 		// create log group and stream
+		fmt.Println("Creating log stream in CloudWatch...")
 		err = jobDriver.CreateLogsInfra(ctx)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating log group and stream")
@@ -233,6 +238,7 @@ var uploadCmd = &cobra.Command{
 		}
 
 		// create dlq SQS for the mappers and coordinator
+		fmt.Println("Creating SQS dead-letter queue...")
 		dlqArn, err := jobDriver.CreateLambdaDLQ(ctx)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating the dead-letter queue for the job mappers")
@@ -240,6 +246,7 @@ var uploadCmd = &cobra.Command{
 		}
 
 		// upload images to amazon ECR and create lambda function
+		fmt.Println("Uploading Lambda functions...")
 		err = jobDriver.UploadLambdaFunctions(ctx, dlqArn)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating functions")
@@ -370,9 +377,9 @@ var setCredsCmd = &cobra.Command{
 }
 
 var logsCmd = &cobra.Command{
-	Use:   "logs",
-	Short: "Get job logs",
-	Long:  `Get job logs`,
+	Use:   "track",
+	Short: "Track the job",
+	Long:  `Track the job`,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
 
