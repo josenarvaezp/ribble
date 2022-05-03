@@ -91,19 +91,16 @@ func assertOutputQ6(t *testing.T, expectedOutputFile string, jobID string) {
 		objects, err := s3Client.ListObjects(context.Background(), &s3.ListObjectsInput{
 			Bucket: &jobID,
 		})
-		if err != nil || len(objects.Contents) == 0 {
+		if err != nil || len(objects.Contents) != 5 {
 			// wait 5 seconds
 			fmt.Println("sleeping")
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		// output ready
-		require.Len(t, objects.Contents, 1)
-
 		res, err := s3Client.GetObject(context.Background(), &s3.GetObjectInput{
 			Bucket: aws.String(jobID),
-			Key:    objects.Contents[0].Key,
+			Key:    aws.String("output"),
 		})
 		require.Nil(t, err)
 

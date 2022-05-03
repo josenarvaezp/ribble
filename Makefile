@@ -6,6 +6,10 @@ integration-s3:
 	awslocal s3 cp ./build/integration_tests/test_data/test_lineitem.tbl.1  s3://integration-test-bucket/test_lineitem.tbl.1
 	awslocal s3 cp ./build/integration_tests/test_data/test_lineitem.tbl.2  s3://integration-test-bucket/test_lineitem.tbl.2
 
+testing-s3:
+	awslocal s3 mb s3://my-input-bucket
+	awslocal s3 cp ./wordcounttext.txt s3://my-input-bucket/text.txt
+
 remove_images:
 	docker images | grep word | awk '{ print $3; }' | xargs docker rmi
 

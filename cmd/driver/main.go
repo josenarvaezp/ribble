@@ -48,11 +48,11 @@ func main() {
 	buildCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
 	uploadCmd.PersistentFlags().StringVar(&jobID, "job-id", "", "id of job to upload")
+	uploadCmd.PersistentFlags().IntVar(&reducers, "reducers", 0, "number of reducers to use")
 	uploadCmd.MarkPersistentFlagRequired("job-id")
 	uploadCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
 	runCmd.PersistentFlags().StringVar(&jobID, "job-id", "", "id of job to run")
-	runCmd.PersistentFlags().IntVar(&reducers, "reducers", 0, "number of reducers to use")
 	runCmd.MarkPersistentFlagRequired("job-id")
 	runCmd.Flags().CountP("verbose", "v", "counted verbosity")
 
@@ -181,21 +181,64 @@ var uploadCmd = &cobra.Command{
 		}
 		jobDriver.BuildData = buildData
 
-		// create log group and stream
-		err = jobDriver.CreateLogsInfra(ctx)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error creating log group and stream")
-			return
-		}
-
 		// Setting up resources
+		fmt.Println("Creating job S3 bucket...")
 		err = jobDriver.CreateJobBucket(ctx)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating the job bucket")
 			return
 		}
 
+		// generate mappings from S3 input bucket
+		fmt.Println("Generating mappings...")
+		mappings, err := jobDriver.GenerateMappings(ctx)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error generating mappings from S3")
+			return
+		}
+
+		// get number of reducers
+		numMappings := len(mappings)
+		if reducers == 0 {
+			// no reducers specified
+			reducers = int(math.Ceil(float64(numMappings) / 2))
+		}
+
+		// update build data
+		buildData.NumMappers = numMappings
+		buildData.NumReducers = reducers
+		err = generators.WriteBuildData(buildData, jobID.String())
+		if err != nil {
+			driverLogger.WithError(err).Error("Error updating build data")
+			return
+		}
+
+		// write mappings to s3
+		fmt.Println("Writing mappings to S3...")
+		err = jobDriver.WriteMappings(ctx, mappings)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error writing mappings to S3")
+			return
+		}
+
+		// create streams for job
+		fmt.Println("Creating streams in SQS...")
+		err = jobDriver.CreateQueues(ctx, reducers)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error creating the job streams")
+			return
+		}
+
+		// create log group and stream
+		fmt.Println("Creating log stream in CloudWatch...")
+		err = jobDriver.CreateLogsInfra(ctx)
+		if err != nil {
+			driverLogger.WithError(err).Error("Error creating log group and stream")
+			return
+		}
+
 		// create dlq SQS for the mappers and coordinator
+		fmt.Println("Creating SQS dead-letter queue...")
 		dlqArn, err := jobDriver.CreateLambdaDLQ(ctx)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating the dead-letter queue for the job mappers")
@@ -203,6 +246,7 @@ var uploadCmd = &cobra.Command{
 		}
 
 		// upload images to amazon ECR and create lambda function
+		fmt.Println("Uploading Lambda functions...")
 		err = jobDriver.UploadLambdaFunctions(ctx, dlqArn)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error creating functions")
@@ -261,42 +305,10 @@ var runCmd = &cobra.Command{
 		}
 		jobDriver.BuildData = buildData
 
-		// generate mappings from S3 input bucket
-		mappings, err := jobDriver.GenerateMappings(ctx)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error generating mappings from S3")
-			return
-		}
-
-		numMappings := len(mappings)
-		if reducers == 0 {
-			// no reducers specified
-			reducers = int(math.Ceil(float64(numMappings) / 2))
-		}
-
-		totalObjects := 0
-		for _, mapping := range mappings {
-			totalObjects = totalObjects + len(mapping.Objects)
-		}
-
-		// create streams for job
-		err = jobDriver.CreateQueues(ctx, reducers)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error creating the job streams")
-			return
-		}
-
 		// start coordinator
-		err = jobDriver.StartCoordinator(ctx, numMappings, reducers)
+		err = jobDriver.StartCoordinator(ctx)
 		if err != nil {
 			driverLogger.WithError(err).Error("Error starting the coordinator")
-			return
-		}
-
-		// start mappers
-		err = jobDriver.StartMappers(ctx, mappings, reducers)
-		if err != nil {
-			driverLogger.WithError(err).Error("Error starting the mappers")
 			return
 		}
 
@@ -365,9 +377,9 @@ var setCredsCmd = &cobra.Command{
 }
 
 var logsCmd = &cobra.Command{
-	Use:   "logs",
-	Short: "Get job logs",
-	Long:  `Get job logs`,
+	Use:   "track",
+	Short: "Track the job",
+	Long:  `Track the job`,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
 

@@ -1,7 +1,9 @@
 package driver
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -12,6 +14,8 @@ import (
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/josenarvaezp/displ/pkg/lambdas"
 )
 
 const (
@@ -139,6 +143,7 @@ func (d *Driver) UploadLambdaFunctions(ctx context.Context, dqlARN *string) erro
 		d.BuildData.MapperData.ImageTag,
 		mapperURI,
 		dqlARN,
+		128,
 	)
 	if err != nil {
 		return err
@@ -161,6 +166,7 @@ func (d *Driver) UploadLambdaFunctions(ctx context.Context, dqlARN *string) erro
 		d.BuildData.CoordinatorData.ImageTag,
 		coordinatorURI,
 		dqlARN,
+		512,
 	)
 	if err != nil {
 		return err
@@ -185,6 +191,7 @@ func (d *Driver) UploadLambdaFunctions(ctx context.Context, dqlARN *string) erro
 			reducer.ImageTag,
 			currentURI,
 			dqlARN,
+			512,
 		)
 		if err != nil {
 			return err
@@ -194,7 +201,14 @@ func (d *Driver) UploadLambdaFunctions(ctx context.Context, dqlARN *string) erro
 	return nil
 }
 
-func (d *Driver) CreateLambdaFunction(ctx context.Context, imageName, imageTag string, imageURI *string, lambdaDlqArn *string) error {
+func (d *Driver) CreateLambdaFunction(
+	ctx context.Context,
+	imageName,
+	imageTag string,
+	imageURI *string,
+	lambdaDlqArn *string,
+	memory int32,
+) error {
 	functionDescription := fmt.Sprintf("Ribble function for %s", imageName)
 	functionTimeout := int32(900)
 	ribbleRoleArn := fmt.Sprintf("arn:aws:iam::%s:role/ribble", d.Config.AccountID)
@@ -213,7 +227,7 @@ func (d *Driver) CreateLambdaFunction(ctx context.Context, imageName, imageTag s
 		PackageType: types.PackageTypeImage,
 		Publish:     true,
 		Timeout:     &functionTimeout,
-		MemorySize:  aws.Int32(1536),
+		MemorySize:  aws.Int32(memory),
 	})
 
 	return err
@@ -237,6 +251,32 @@ func (d *Driver) CreateLogsInfra(ctx context.Context) error {
 		LogGroupName:  &logGroupName,
 		LogStreamName: &logStreamName,
 	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// WriteMappings writes the mappings to s3 so that the coordinator can read them
+func (d *Driver) WriteMappings(ctx context.Context, mappings []*lambdas.Mapping) error {
+	// encode map to JSON
+	p, err := json.Marshal(mappings)
+	if err != nil {
+		return err
+	}
+
+	// use uploader manager to write file to S3
+	jsonContentType := "application/json"
+	bucket := d.JobID.String()
+	input := &s3.PutObjectInput{
+		Bucket:        &bucket,
+		Key:           aws.String("mappings"),
+		Body:          bytes.NewReader(p),
+		ContentType:   &jsonContentType,
+		ContentLength: int64(len(p)),
+	}
+	_, err = d.UploaderAPI.Upload(ctx, input)
 	if err != nil {
 		return err
 	}

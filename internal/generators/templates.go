@@ -53,8 +53,15 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 		nil, // empty token as it is the first log
 	)
 
+	// start mappers
+	err := c.StartMappers(ctx, request.NumQueues, request.FunctionName)
+	if err != nil {
+		coordinatorLogger.WithError(err).Error("Error starting the mappers")
+		return err
+	}
+
 	// waits until mappers are done
-	nextLogToken, err := c.AreMappersDone(ctx, nextLogToken)
+	nextLogToken, err = c.AreMappersDone(ctx, nextLogToken)
 	if err != nil {
 		coordinatorLogger.WithError(err).Error("Error reading mappers done queue")
 		return err
@@ -97,7 +104,7 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 	)
 
 	// indicate reducers are done
-	if err := c.WriteDoneObject(ctx); err != nil {
+	if err := c.WriteDoneObject(ctx, "done"); err != nil {
 		coordinatorLogger.WithError(err).Error("Error writing done signal")
 		return err
 	}
@@ -167,8 +174,15 @@ func HandleRequest(ctx context.Context, request lambdas.CoordinatorInput) error 
 		nil, // empty token as it is the first log
 	)
 
+	// start mappers
+	err := c.StartMappers(ctx, request.NumQueues, request.FunctionName)
+	if err != nil {
+		coordinatorLogger.WithError(err).Error("Error starting the mappers")
+		return err
+	}
+
 	// waits until mappers are done
-	nextLogToken, err := c.AreMappersDone(ctx, nextLogToken)
+	nextLogToken, err = c.AreMappersDone(ctx, nextLogToken)
 	if err != nil {
 		coordinatorLogger.WithError(err).Error("Error reading mappers done queue")
 		return err
@@ -538,6 +552,9 @@ func HandleRequest(ctx context.Context, request lambdas.MapperInput) error {
 	// keep a dictionary with the number of messages per queue
 	messageMetadata := make(map[int]int64)
 
+	// create random number generator with seed
+	randGen := m.InitRandomSeed()
+
 	for _, object := range request.Mapping.Objects {
 		// download file
 		filename, err := m.DownloadFile(object)
@@ -556,7 +573,7 @@ func HandleRequest(ctx context.Context, request lambdas.MapperInput) error {
 		mapOutput := lambdas.RunMapAggregator(*filename, {{.PackageName}}.{{.Function}})
 
 		// send output to reducers via queues
-		err = m.EmitRandom(ctx, mapOutput, messageMetadata)
+		err = m.EmitRandom(ctx, mapOutput, messageMetadata, randGen)
 		if err != nil {
 			mapperLogger.
 				WithFields(log.Fields{
@@ -944,7 +961,8 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 			// in the background while we keep processing messages
 
 			// merge the dedupe map so that the read dedupe map is up to date
-			r.Dedupe.Merge()
+			wg.Add(1)
+			go r.Dedupe.Merge()
 
 			// save intermediate dedupe
 			wg.Add(1)
@@ -1054,11 +1072,6 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 	// update output map with reduced intermediate results
 	wg.Add(1)
 	go r.Output.UpdateOutput(intermediateReducedMap, &wg)
-
-	// delete all messages from queue
-	wg.Add(1)
-	go r.DeleteIntermediateMessagesFromQueue(ctx, queueURL, processedMessagesDeleteInfo, &wg)
-
 	wg.Wait()
 
 	{{if .WithFilter}}
@@ -1087,6 +1100,11 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 		return err
 	}
 	{{end}}
+
+	// delete all messages from queue
+	wg.Add(1)
+	go r.DeleteIntermediateMessagesFromQueue(ctx, queueURL, processedMessagesDeleteInfo, &wg)
+	wg.Wait()
 
 	// indicate reducer has finished
 	err = r.SendFinishedEvent(ctx)
@@ -1296,11 +1314,6 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 	// update output map with reduced intermediate results
 	wg.Add(1)
 	go r.Output.UpdateOutput(intermediateOutput, &wg)
-
-	// delete all messages from queue
-	wg.Add(1)
-	go r.DeleteIntermediateMessagesFromQueue(ctx, queueURL, processedMessagesDeleteInfo, &wg)
-
 	wg.Wait()
 
 	{{if .WithFilter}}
@@ -1329,6 +1342,11 @@ func HandleRequest(ctx context.Context, request lambdas.ReducerInput) error {
 		return err
 	}
 	{{end}}
+
+	// delete all messages from queue
+	wg.Add(1)
+	go r.DeleteIntermediateMessagesFromQueue(ctx, queueURL, processedMessagesDeleteInfo, &wg)
+	wg.Wait()
 
 	return nil
 }
