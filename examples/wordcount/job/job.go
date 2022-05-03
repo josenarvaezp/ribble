@@ -21,7 +21,7 @@ func main() {
 	// define job
 	ribble.Job(
 		wordcount.WordCount,
-		wordcount.Having,
+		nil,
 		wordcount.Sort,
 		config,
 	)
