@@ -1,0 +1,32 @@
+JobPath: examples
+BuildDir: ./build/lambda_gen/889f6305-bca8-4234-8284-2312998ca2ca
+MapperData:
+  PackagePath: github.com/josenarvaezp/displ/examples/wordcount
+  PackageName: wordcount
+  GeneratedFile: ./build/lambda_gen/889f6305-bca8-4234-8284-2312998ca2ca/map/WordCount.go
+  Function: WordCount
+  ImageName: wordcount_889f6305-bca8-4234-8284-2312998ca2ca
+  ImageTag: latest
+  Dockerfile: ./build/lambda_gen/889f6305-bca8-4234-8284-2312998ca2ca/dockerfiles/Dockerfile.WordCount
+  Local: true
+CoordinatorData:
+  LambdaAggregator: map_aggregator
+  GeneratedFile: ./build/lambda_gen/889f6305-bca8-4234-8284-2312998ca2ca/coordinator/coordinator.go
+  Function: coordinator
+  ImageName: coordinator_889f6305-bca8-4234-8284-2312998ca2ca
+  ImageTag: latest
+  Dockerfile: ./build/lambda_gen/889f6305-bca8-4234-8284-2312998ca2ca/dockerfiles/Dockerfile.coordinator
+  Local: true
+ReducerData:
+- ReducerName: map_aggregator
+  PackagePath: github.com/josenarvaezp/displ/examples/wordcount
+  PackageName: wordcount
+  GeneratedFile: ./build/lambda_gen/889f6305-bca8-4234-8284-2312998ca2ca/map_aggregator/map_aggregator.go
+  SortFunction: Sort
+  WithSort: true
+  ImageName: map_aggregator_889f6305-bca8-4234-8284-2312998ca2ca
+  ImageTag: latest
+  Dockerfile: ./build/lambda_gen/889f6305-bca8-4234-8284-2312998ca2ca/dockerfiles/Dockerfile.map_aggregator
+  Local: true
+NumMappers: 1
+NumReducers: 1

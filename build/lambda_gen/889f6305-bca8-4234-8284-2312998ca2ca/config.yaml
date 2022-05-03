@@ -1,0 +1,9 @@
+input:
+- my-input-bucket
+region: eu-west-2
+local: true
+logLevel: 1
+accountID: "000000000000"
+username: my-iam-user
+logicalSplit: true
+randomizedPartition: false
