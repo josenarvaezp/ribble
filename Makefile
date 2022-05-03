@@ -15,3 +15,6 @@ remove_images:
 
 download-output:
 	awslocal s3api get-object --bucket 2f18f4e1-60e7-491f-97b7-989c996f577e --key output oooout4
+
+create-mocks:
+	mockery --dir ./internal --all 

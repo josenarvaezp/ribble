@@ -426,25 +426,6 @@ func (c *Coordinator) GetDoneObject(ctx context.Context, filename string) bool {
 	return true
 }
 
-// // WriteDoneObject writes a blank object to indicate that the job has finished
-// func (c *Coordinator) WriteDoneObject2(ctx context.Context) error {
-// 	bucket := c.JobID.String()
-// 	key := fmt.Sprintf("done-job")
-
-// 	input := &s3.PutObjectInput{
-// 		Bucket: &bucket,
-// 		Key:    &key,
-// 		Body:   bytes.NewReader([]byte{}),
-// 	}
-
-// 	_, err := c.UploaderAPI.Upload(ctx, input)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	return nil
-// }
-
 // GetNumMessagesInQueue gets the approximate number of messages in a queue
 func (c *Coordinator) GetNumMessagesInQueue(ctx context.Context, queueURL string) (int, error) {
 	res, _ := c.QueuesAPI.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
