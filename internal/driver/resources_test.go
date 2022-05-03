@@ -17,16 +17,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_StartCoordinator_HappyPath2(t *testing.T) {
+func Test_StartCoordinator_HappyPath(t *testing.T) {
 	ctx := context.Background()
 	jobId := uuid.New()
 	numMappers := 10
-	numReducers := 2
-	functionArn := "arn:aws:lambda:eu-west-2:000000000000:function:test-name"
+	numReducers := 3
+	functionArn := "arn:aws:lambda:eu-west-2:000000000000:function:coordinator-name"
 	request := &lambdas.CoordinatorInput{
-		JobID:      jobId,
-		NumMappers: numMappers,
-		NumQueues:  numReducers,
+		JobID:        jobId,
+		NumMappers:   numMappers,
+		NumQueues:    numReducers,
+		FunctionName: "map-name",
 	}
 
 	// expected payload
@@ -53,41 +54,18 @@ func Test_StartCoordinator_HappyPath2(t *testing.T) {
 			AccountID: "000000000000",
 		},
 		BuildData: &generators.BuildData{
+			NumMappers:  10,
+			NumReducers: 3,
 			CoordinatorData: &generators.CoordinatorData{
-				ImageName: "test-name",
+				ImageName: "coordinator-name",
+			},
+			MapperData: &generators.FunctionData{
+				ImageName: "map-name",
 			},
 		},
 		FaasAPI: lambdaMock,
 	}
 
-	err = jobDriver.StartCoordinator(ctx, numMappers, numReducers)
-	assert.Nil(t, err)
-}
-
-var jobConfig config.Config
-var jobBuildData *generators.BuildData
-var expectedInvokeInput string
-var expectedResult string
-
-func Test_StartCoordinator_HappyPath(t *testing.T) {
-	// set input
-	ctx := context.Background()
-	numMappers := 10
-	numReducers := 2
-
-	// set mock
-	lambdaMock := new(mocks.FaasAPI)
-	lambdaMock.On("Invoke", ctx, expectedInvokeInput).
-		Return(expectedResult, nil)
-
-	// init driver
-	jobDriver := Driver{
-		JobID:     uuid.New(),
-		Config:    jobConfig,
-		BuildData: jobBuildData,
-		FaasAPI:   lambdaMock,
-	}
-
-	err := jobDriver.StartCoordinator(ctx, numMappers, numReducers)
+	err = jobDriver.StartCoordinator(ctx)
 	assert.Nil(t, err)
 }
