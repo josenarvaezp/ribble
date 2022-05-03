@@ -436,11 +436,12 @@ func (c *Coordinator) GetNumMessagesInQueue(ctx context.Context, queueURL string
 			sqsTypes.QueueAttributeNameApproximateNumberOfMessagesNotVisible,
 		},
 	})
-	totalMappersStr := res.Attributes["ApproximateNumberOfMessages"]
-	totalMappersStr = totalMappersStr + res.Attributes["ApproximateNumberOfMessagesDelayed"]
-	totalMappersStr = totalMappersStr + res.Attributes["ApproximateNumberOfMessagesNotVisible"]
 
-	return strconv.Atoi(totalMappersStr)
+	approxMappers, _ := strconv.Atoi(res.Attributes["ApproximateNumberOfMessages"])
+	delayedMappers, _ := strconv.Atoi(res.Attributes["ApproximateNumberOfMessagesDelayed"])
+	notVisibleMappers, _ := strconv.Atoi(res.Attributes["ApproximateNumberOfMessagesNotVisible"])
+
+	return approxMappers + delayedMappers + notVisibleMappers, nil
 }
 
 // LogEvents logs multiple events to cloudwatch
